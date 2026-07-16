@@ -1,0 +1,1 @@
+"""emergencies infrastructure layer."""

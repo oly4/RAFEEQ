@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rafeeq-robot"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.10,<3", "pydantic-settings>=2.6,<3", "sqlalchemy>=2,<3", "apscheduler>=3.10,<4", "paho-mqtt>=2,<3", "httpx>=0.28,<1"]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.13,<2", "pytest>=8.3,<9", "ruff>=0.8,<1"]
+voice = ["openai>=1.0,<3", "websockets>=13,<16"]
+vision = [
+  "joblib==1.5.2",
+  "mediapipe>=0.10.20,<0.11",
+  "numpy>=2,<3",
+  "opencv-python>=4.10,<6",
+  "scikit-learn==1.7.2",
+]
+
+[project.scripts]
+rafeeq-robot = "rafeeq_robot.main:main"
+rafeeq-fall-demo = "rafeeq_robot.detection.webcam_demo:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rafeeq_robot"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

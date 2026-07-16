@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rafeeq.example/contracts/device-event-v1.schema.json",
+  "title": "RAFEEQ Device Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "event_type", "device_id", "patient_id", "occurred_at", "sequence", "payload"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"$ref": "../shared-enums-v1.schema.json#/$defs/deviceEventType"},
+    "device_id": {"type": "string", "format": "uuid"},
+    "patient_id": {"type": "string", "format": "uuid"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "payload": {"type": "object"}
+  }
+}
+

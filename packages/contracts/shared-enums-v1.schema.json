@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "deviceEventType": {
+      "enum": ["device_started", "device_heartbeat", "device_offline_detected", "possible_fall_detected", "fall_verification_started", "fall_verification_result", "sos_pressed", "reminder_due", "reminder_spoken", "reminder_completed", "reminder_snoozed", "reminder_missed", "voice_command_recognized", "activity_started", "activity_completed", "sync_started", "sync_completed", "sync_failed", "hardware_error"]
+    },
+    "emergencyStatus": {"enum": ["detected", "verifying", "false_alarm", "confirmed", "notified", "acknowledged", "resolved"]}
+  }
+}
+

@@ -1,0 +1,16 @@
+[Unit]
+Description=RAFEEQ Robot Service
+After=network-online.target
+
+[Service]
+Type=simple
+User=rafeeq
+WorkingDirectory=/opt/rafeeq/edge/robot
+EnvironmentFile=/etc/rafeeq/robot.env
+ExecStart=/opt/rafeeq/.venv/bin/rafeeq-robot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

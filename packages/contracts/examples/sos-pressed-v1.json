@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "event_id": "16db27d8-c9b5-451a-a62d-4cb4e3c729b0",
+  "event_type": "sos_pressed",
+  "device_id": "522f4374-9fa0-46e8-a767-e667d75d5570",
+  "patient_id": "ba438727-2335-4431-80d8-c9ea637cc4d5",
+  "occurred_at": "2026-07-10T14:22:10Z",
+  "sequence": 1042,
+  "payload": {}
+}
+
