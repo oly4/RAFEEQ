@@ -8,7 +8,7 @@ Type=simple
 User=rafeeq
 WorkingDirectory=/opt/rafeeq
 EnvironmentFile=/etc/rafeeq/robot.env
-ExecStart=/bin/bash -lc 'source /etc/rafeeq/robot.env && /opt/rafeeq/edge/robot/.venv/bin/rafeeq-fall-demo --camera-index "${CAMERA_INDEX:-0}" --detector heuristic --speaker openai --voice-verification --verification-timeout "${FALL_VERIFICATION_TIMEOUT_SECONDS:-10}"'
+ExecStart=/bin/bash -lc 'source /etc/rafeeq/robot.env; export RAFEEQ_CAMERA_READY_FILE="${RAFEEQ_CAMERA_READY_FILE:-/tmp/rafeeq-runtime/camera_ready}"; rm -f "$RAFEEQ_CAMERA_READY_FILE"; /opt/rafeeq/edge/robot/.venv/bin/rafeeq-fall-demo --camera-index "${CAMERA_INDEX:-0}" --detector motion --headless --speaker openai --voice-verification --verification-timeout "${FALL_VERIFICATION_TIMEOUT_SECONDS:-20}" --cooldown "${FALL_DETECTION_COOLDOWN_SECONDS:-60}" & pid=$!; deadline=$((SECONDS + ${CAMERA_STARTUP_WATCHDOG_SECONDS:-180})); while kill -0 "$pid" 2>/dev/null; do if [ -f "$RAFEEQ_CAMERA_READY_FILE" ]; then wait "$pid"; exit $?; fi; if [ "$SECONDS" -ge "$deadline" ]; then echo "RAFEEQ camera did not become ready before startup watchdog; restarting." >&2; kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; exit 1; fi; sleep 1; done; wait "$pid"; exit $?'
 Restart=always
 RestartSec=5
 

@@ -2,7 +2,6 @@ import json
 import re
 import urllib.request
 from datetime import datetime, time, timezone
-from itertools import count
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, status
@@ -33,6 +32,10 @@ from rafeeq_backend.modules.patients.application.policies import (
     require_caregiver_access,
     require_patient_access,
 )
+from rafeeq_backend.modules.patients.application.voice_events import (
+    list_voice_command_events as list_stored_voice_command_events,
+    store_voice_command_event,
+)
 from rafeeq_backend.modules.patients.domain.schemas import (
     AlertRecipientResponse,
     CareProfileResponse,
@@ -49,9 +52,6 @@ from rafeeq_backend.modules.patients.domain.schemas import (
 )
 
 router = APIRouter(tags=["patients"])
-
-_VOICE_COMMAND_SEQUENCE = count(1)
-_VOICE_COMMAND_EVENTS: dict[str, list[dict[str, object]]] = {}
 
 
 @router.get("/patients", response_model=PatientList)
@@ -363,25 +363,11 @@ def list_voice_command_events(
     since: int = 0,
 ) -> dict[str, object]:
     require_patient_access(db, user, patient_id)
-    items = [
-        item
-        for item in _VOICE_COMMAND_EVENTS.get(patient_id, [])
-        if int(item.get("sequence", 0)) > since
-    ]
-    latest_sequence = since
-    if items:
-        latest_sequence = max(int(item.get("sequence", since)) for item in items)
-    return {"items": items, "latest_sequence": latest_sequence}
+    return list_stored_voice_command_events(patient_id, since)
 
 
 def _store_voice_command_event(patient_id: str, response: VoiceCommandResponse) -> None:
-    event = response.model_dump()
-    event["assistant_text"] = ""
-    event["audio_data_url"] = None
-    event["sequence"] = next(_VOICE_COMMAND_SEQUENCE)
-    events = _VOICE_COMMAND_EVENTS.setdefault(patient_id, [])
-    events.append(event)
-    del events[:-20]
+    store_voice_command_event(patient_id, response.model_dump())
 
 
 def _sanitize_voice_assistant_text(text: str) -> str:

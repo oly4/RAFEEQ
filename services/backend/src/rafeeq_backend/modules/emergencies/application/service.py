@@ -1,3 +1,6 @@
+from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,11 +11,15 @@ from rafeeq_backend.models import (
     DeviceEvent,
     EmergencyEvent,
     EmergencyStateTransition,
+    MedicationDetail,
     Notification,
+    Patient,
+    Routine,
     RoutineOccurrence,
     utc_now,
 )
 from rafeeq_backend.modules.emergencies.domain.schemas import DeviceEventEnvelope, IngestResult
+from rafeeq_backend.modules.patients.application.voice_events import store_voice_command_event
 
 
 def _transition(
@@ -193,12 +200,162 @@ def ingest_event(db: Session, device: Device, event: DeviceEventEnvelope) -> Ing
                 occurrence.status = "snoozed"
             else:
                 occurrence.status = "missed"
+    elif event.event_type == "voice_app_action":
+        action = str(event.payload.get("action") or "unknown")
+        allowed_actions = {
+            "open_dashboard",
+            "open_routine",
+            "open_activities",
+            "open_album",
+            "open_settings",
+            "start_poem_test",
+            "start_photo_test",
+            "add_routine",
+            "edit_routine",
+            "delete_routine",
+            "complete_routine",
+            "undo_complete_routine",
+            "unknown",
+        }
+        if action not in allowed_actions:
+            action = "unknown"
+        store_voice_command_event(
+            patient_id,
+            {
+                "transcript": str(event.payload.get("transcript") or ""),
+                "action": action,
+                "assistant_text": str(event.payload.get("assistant_text") or ""),
+                "audio_data_url": None,
+                "routine_created": False,
+                "routine_title": None,
+                "needs_confirmation": False,
+                "used_openai": bool(event.payload.get("used_openai", True)),
+            },
+        )
+    elif event.event_type == "voice_routine_create":
+        created = _create_voice_routine_from_device_event(db, device, patient_id, event)
+        if created is not None:
+            store_voice_command_event(
+                patient_id,
+                {
+                    "transcript": str(event.payload.get("transcript") or ""),
+                    "action": "add_routine",
+                    "assistant_text": str(
+                        event.payload.get("assistant_text") or f"تم، أضفت {created.title}."
+                    ),
+                    "audio_data_url": None,
+                    "routine_created": True,
+                    "routine_title": created.title,
+                    "needs_confirmation": False,
+                    "used_openai": bool(event.payload.get("used_openai", True)),
+                },
+            )
     db.commit()
     return IngestResult(
         event_id=event.event_id,
         status="processed",
         emergency_id=emergency.id if emergency else None,
     )
+
+
+def _create_voice_routine_from_device_event(
+    db: Session,
+    device: Device,
+    patient_id: str,
+    event: DeviceEventEnvelope,
+) -> Routine | None:
+    patient = db.get(Patient, patient_id)
+    routine_data = event.payload.get("routine")
+    if patient is None or not isinstance(routine_data, dict):
+        return None
+    title = str(routine_data.get("title") or "").strip()
+    time_24h = str(routine_data.get("time_24h") or "").strip()
+    routine_type = str(routine_data.get("type") or "custom").strip()
+    if not title or not time_24h:
+        return None
+    if routine_type not in {
+        "medication",
+        "appointment",
+        "meal",
+        "water",
+        "spiritual",
+        "memory_exercise",
+        "conversation",
+        "custom",
+    }:
+        routine_type = "custom"
+    try:
+        hour_text, minute_text = time_24h.split(":", 1)
+        scheduled_time = time(int(hour_text), int(minute_text[:2]))
+    except (TypeError, ValueError):
+        return None
+    try:
+        local_zone = ZoneInfo(patient.timezone)
+    except ZoneInfoNotFoundError:
+        local_zone = timezone.utc
+    caregiver_id = db.scalar(
+        select(CaregiverPatient.caregiver_user_id)
+        .where(CaregiverPatient.patient_id == patient_id)
+        .order_by(CaregiverPatient.is_primary.desc(), CaregiverPatient.created_at)
+        .limit(1)
+    )
+    if caregiver_id is None:
+        return None
+    today = datetime.now(local_zone).date()
+    description_raw = routine_data.get("description")
+    routine = Routine(
+        patient_id=patient_id,
+        type=routine_type,
+        title=title[:200],
+        description=str(description_raw).strip() if description_raw else None,
+        timezone=patient.timezone,
+        start_date=today,
+        recurrence_rule="FREQ=DAILY",
+        scheduled_local_time=scheduled_time,
+        requires_confirmation=True,
+        snooze_minutes=10,
+        max_snoozes=2,
+        created_by=str(caregiver_id),
+    )
+    db.add(routine)
+    db.flush()
+    if routine_type == "medication":
+        medication_raw = routine_data.get("medication")
+        medication_data = medication_raw if isinstance(medication_raw, dict) else {}
+        medication_name = str(medication_data.get("medication_name") or title).strip()
+        dosage_text = str(medication_data.get("dosage_text") or "حسب الوصفة").strip()
+        instructions_raw = medication_data.get("instructions")
+        db.add(
+            MedicationDetail(
+                routine_id=routine.id,
+                medication_name=medication_name[:200],
+                dosage_text=dosage_text[:200],
+                instructions=str(instructions_raw).strip() if instructions_raw else None,
+            )
+        )
+        routine.title = medication_name[:200]
+    scheduled_local = datetime.combine(today, scheduled_time, tzinfo=local_zone)
+    db.add(
+        RoutineOccurrence(
+            routine_id=routine.id,
+            patient_id=patient_id,
+            scheduled_at_utc=scheduled_local.astimezone(timezone.utc),
+            status="pending",
+        )
+    )
+    db.add(
+        AuditLog(
+            actor_device_id=device.id,
+            action="routine.created_by_voice",
+            entity_type="routine",
+            entity_id=routine.id,
+            metadata_json={
+                "patient_id": patient_id,
+                "transcript": str(event.payload.get("transcript") or ""),
+            },
+        )
+    )
+    return routine
 
 
 def transition_by_user(

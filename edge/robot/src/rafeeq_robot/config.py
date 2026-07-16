@@ -20,13 +20,14 @@ class RobotSettings(BaseSettings):
     fall_detection_cooldown_seconds: int = 60
     voice_interaction_provider: str = "simulation"
     vosk_model_path: str = "./.run/models/vosk-ar"
-    vosk_input_device: int | None = None
+    vosk_input_device: int | str | None = None
     vosk_sample_rate: int = 16000
     voice_listen_seconds: int = 15
     voice_reasoning_provider: str = "local"
     openai_api_key: str = ""
     openai_realtime_model: str = "gpt-realtime-2.1-mini"
     openai_text_model: str = "gpt-5.4-nano"
+    openai_reasoning_effort: str = "medium"
     openai_transcription_model: str = "gpt-4o-mini-transcribe"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
@@ -36,6 +37,10 @@ class RobotSettings(BaseSettings):
     voice_max_session_seconds: int = 120
     voice_reminder_snooze_minutes: int = 10
     voice_upload_audio: bool = False
+    voice_silence_threshold: int = 24
+    voice_confirm_before_response: bool = False
+    voice_wake_word_required: bool = False
+    voice_wake_words: str = "يا رفيق,يارفيق,رفيق,رافع,rafeeq,rafeeq"
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=(".env", ".env.robot"), extra="ignore")

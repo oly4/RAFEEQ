@@ -63,22 +63,40 @@ make_venv() {
   local extras="$2"
   log "Creating Python environment in $dir"
   if [[ "$PYTHON_RUNNER" == sudo*uv* ]]; then
-    sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && ~/.local/bin/uv venv --python 3.12 .venv"
-    sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && .venv/bin/python -m pip install -U pip"
+    sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && ~/.local/bin/uv venv --system-site-packages --python 3.12 .venv"
+    sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 .venv/bin/python -m pip install --progress-bar off --prefer-binary -U pip"
   else
-    sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && $PYTHON_RUNNER -m venv .venv && .venv/bin/python -m pip install -U pip"
+    sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && $PYTHON_RUNNER -m venv --system-site-packages .venv && PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 .venv/bin/python -m pip install --progress-bar off --prefer-binary -U pip"
   fi
-  sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && .venv/bin/python -m pip install -e '$extras'"
+  sudo -u "$SERVICE_USER" bash -lc "cd '$dir' && PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 .venv/bin/python -m pip install --progress-bar off --prefer-binary -e '$extras'"
 }
 
 random_secret() {
   openssl rand -hex 32
 }
 
+compose() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  else
+    docker-compose "$@"
+  fi
+}
+
+ensure_compose_env() {
+  # docker-compose.yml references .env globally, even when starting only
+  # Postgres/Redis/Mosquitto. Create a harmless placeholder before compose runs.
+  if [ ! -f "$INSTALL_DIR/.env" ]; then
+    install -m 0640 -o "$SERVICE_USER" -g "$SERVICE_USER" /dev/null "$INSTALL_DIR/.env"
+  fi
+}
+
 write_env_files() {
   log "Writing /etc/rafeeq environment files"
   mkdir -p /etc/rafeeq "$INSTALL_DIR/data"
-  chmod 750 /etc/rafeeq
+  chmod 755 /etc/rafeeq
+  chown root:"$SERVICE_USER" /etc/rafeeq
+  chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/data"
 
   local jwt_access jwt_refresh demo_caregiver demo_doctor demo_device openai_key
   jwt_access="$(random_secret)"
@@ -155,10 +173,9 @@ CAMERA_INDEX=${CAMERA_INDEX}
 FALL_VERIFICATION_TIMEOUT_SECONDS=10
 FALL_DETECTION_COOLDOWN_SECONDS=60
 VOICE_INTERACTION_PROVIDER=vosk
-VOICE_REASONING_PROVIDER=openai
-SPEAKER_PROVIDER=console
+VOICE_REASONING_PROVIDER=local
+SPEAKER_PROVIDER=espeak
 VOSK_MODEL_PATH=${INSTALL_DIR}/.run/models/vosk-ar
-VOSK_INPUT_DEVICE=
 VOSK_SAMPLE_RATE=16000
 VOICE_LISTEN_SECONDS=15
 OPENAI_API_KEY=${openai_key}
@@ -182,6 +199,7 @@ Demo family:
 Demo doctor:
   doctor@demo.rafeeq.app / ${DEMO_DOCTOR_PASSWORD:-Rafeeq-Test-2026!}
 EOF
+  chmod 644 /etc/rafeeq/summary.txt
 }
 
 install_services() {
@@ -201,18 +219,24 @@ main() {
   need_sudo
   log "Installing OS packages"
   apt-get update
-  apt-get install -y git curl ca-certificates openssl docker.io docker-compose-plugin \
-    ffmpeg alsa-utils portaudio19-dev libopencv-dev python3 python3-venv python3-pip
+  apt-get install -y git curl ca-certificates openssl docker.io docker-compose \
+    ffmpeg alsa-utils portaudio19-dev libopencv-dev python3 python3-venv python3-pip \
+    python3-opencv python3-picamera2 espeak-ng
 
   ensure_user
-  usermod -aG docker "$SERVICE_USER" || true
+  for group in docker video render input gpio i2c spi audio; do
+    if getent group "$group" >/dev/null 2>&1; then
+      usermod -aG "$group" "$SERVICE_USER" || true
+    fi
+  done
   ensure_repo
   ensure_python_runner
 
   log "Starting Postgres, Redis, and Mosquitto"
-  docker compose -f "$INSTALL_DIR/docker-compose.yml" up -d postgres redis mosquitto
+  ensure_compose_env
+  compose -f "$INSTALL_DIR/docker-compose.yml" up -d postgres redis mosquitto
   for _ in $(seq 1 40); do
-    if docker compose -f "$INSTALL_DIR/docker-compose.yml" exec -T postgres pg_isready -U rafeeq >/dev/null 2>&1; then
+    if compose -f "$INSTALL_DIR/docker-compose.yml" exec -T postgres pg_isready -U rafeeq >/dev/null 2>&1; then
       break
     fi
     sleep 2
@@ -221,7 +245,7 @@ main() {
   make_venv "$INSTALL_DIR/services/backend" "."
   make_venv "$INSTALL_DIR/edge/robot" ".[voice]"
   log "Installing vision dependencies; if this fails, camera service may need manual MediaPipe setup"
-  sudo -u "$SERVICE_USER" bash -lc "cd '$INSTALL_DIR/edge/robot' && .venv/bin/python -m pip install -e '.[vision]'" || true
+  sudo -u "$SERVICE_USER" bash -lc "cd '$INSTALL_DIR/edge/robot' && PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 .venv/bin/python -m pip install --progress-bar off --prefer-binary -e '.[vision]'" || true
 
   write_env_files
   seed_and_write_robot_env

@@ -6,7 +6,6 @@ import subprocess
 import sys
 import tempfile
 from uuid import uuid4
-import winsound
 
 from rafeeq_robot.hardware.interfaces import SpeakerAdapter
 from rafeeq_robot.hardware.simulation.adapters import clean_speech_text, format_console_text
@@ -69,6 +68,11 @@ class PiperSpeaker(SpeakerAdapter):
                 self.fallback.speak(text, locale)
                 return
             if wav_path.exists() and wav_path.stat().st_size > 0:
-                winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
+                if sys.platform == "win32":
+                    import winsound
+
+                    winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
+                else:
+                    subprocess.run(["aplay", str(wav_path)], check=False)
         finally:
             wav_path.unlink(missing_ok=True)

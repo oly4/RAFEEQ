@@ -7,7 +7,7 @@ Type=simple
 User=rafeeq
 WorkingDirectory=/opt/rafeeq
 EnvironmentFile=/etc/rafeeq/robot.env
-ExecStart=/opt/rafeeq/edge/robot/.venv/bin/rafeeq-robot
+ExecStart=/opt/rafeeq/edge/robot/.venv/bin/rafeeq-robot --daemon
 Restart=always
 RestartSec=5
 

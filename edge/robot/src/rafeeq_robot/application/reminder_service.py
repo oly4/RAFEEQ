@@ -151,13 +151,96 @@ class ReminderService:
             return None
 
     def find_task_status(self, query: str = "") -> RoutineTaskStatus | None:
+        match = self._find_best_occurrence(query)
+        if match is None:
+            return None
+        occurrence, routine = match
+        return RoutineTaskStatus(
+            title=routine.title,
+            routine_type=routine.type,
+            status=occurrence.status,
+            scheduled_at_utc=occurrence.scheduled_at_utc,
+        )
+
+    def complete_best_match(self, query: str, source: str = "openai_voice") -> RoutineTaskStatus | None:
+        return self._set_best_match_status(query, "completed", source)
+
+    def snooze_best_match(
+        self,
+        query: str,
+        minutes: int = 10,
+        source: str = "openai_voice",
+    ) -> RoutineTaskStatus | None:
+        match = self._find_best_occurrence(query)
+        if match is None:
+            return None
+        occurrence, routine = match
+        self.snooze(occurrence.id, minutes, source)
+        return RoutineTaskStatus(
+            title=routine.title,
+            routine_type=routine.type,
+            status="snoozed",
+            scheduled_at_utc=occurrence.scheduled_at_utc + timedelta(minutes=minutes),
+        )
+
+    def miss_best_match(self, query: str, source: str = "openai_voice") -> RoutineTaskStatus | None:
+        return self._set_best_match_status(query, "missed", source)
+
+    def undo_best_match_completion(
+        self, query: str, source: str = "openai_voice"
+    ) -> RoutineTaskStatus | None:
+        match = self._find_best_occurrence(query, completed_only=True)
+        if match is None:
+            return None
+        occurrence, routine = match
+        now = datetime.now(timezone.utc)
+        with self.database.session() as session, session.begin():
+            stored = session.get(LocalOccurrence, occurrence.id)
+            if stored is None:
+                return None
+            stored.status = "pending"
+            self.outbox.record_in_session(
+                session,
+                "voice_task_completion_undone",
+                {"occurrence_id": stored.id, "confirmation_source": source},
+                now,
+            )
+        return RoutineTaskStatus(
+            title=routine.title,
+            routine_type=routine.type,
+            status="pending",
+            scheduled_at_utc=occurrence.scheduled_at_utc,
+        )
+
+    def _set_best_match_status(
+        self, query: str, status: str, source: str
+    ) -> RoutineTaskStatus | None:
+        match = self._find_best_occurrence(query)
+        if match is None:
+            return None
+        occurrence, routine = match
+        if status == "completed":
+            self.complete(occurrence.id, source)
+        elif status == "missed":
+            self.mark_missed(occurrence.id, source)
+        else:
+            raise ValueError(f"Unsupported status: {status}")
+        return RoutineTaskStatus(
+            title=routine.title,
+            routine_type=routine.type,
+            status=status,
+            scheduled_at_utc=occurrence.scheduled_at_utc,
+        )
+
+    def _find_best_occurrence(
+        self, query: str = "", completed_only: bool = False
+    ) -> tuple[LocalOccurrence, LocalRoutine] | None:
         normalized_query = _normalize_text(query)
         with self.database.session() as session:
-            occurrences = list(
-                session.scalars(
-                    select(LocalOccurrence).order_by(LocalOccurrence.scheduled_at_utc.desc())
-                ).all()
-            )
+            statement = select(LocalOccurrence).order_by(LocalOccurrence.scheduled_at_utc.desc())
+            if completed_only:
+                statement = statement.where(LocalOccurrence.status == "completed")
+            occurrences = list(session.scalars(statement).all())
             candidates: list[tuple[int, LocalOccurrence, LocalRoutine]] = []
             for occurrence in occurrences:
                 routine = session.get(LocalRoutine, occurrence.routine_id)
@@ -171,12 +254,7 @@ class ReminderService:
             score, occurrence, routine = candidates[0]
             if normalized_query and score <= 0 and len(candidates) > 1:
                 return None
-            return RoutineTaskStatus(
-                title=routine.title,
-                routine_type=routine.type,
-                status=occurrence.status,
-                scheduled_at_utc=occurrence.scheduled_at_utc,
-            )
+            return occurrence, routine
 
     def list_task_statuses(self, limit: int = 20) -> list[RoutineTaskStatus]:
         with self.database.session() as session:

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import array
 import hmac
 import io
+import os
+import subprocess
 import sys
 import threading
 import time
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
@@ -16,6 +20,7 @@ import wave
 from rafeeq_robot.application.emergency_manager import EmergencyManager
 from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.config import RobotSettings
+from rafeeq_robot.detection.interfaces import FallDetectionResult
 from rafeeq_robot.detection.pose_detector import MediaPipePoseFallDetector
 from rafeeq_robot.detection.trained_detector import (
     FALL_MODEL_SHA256,
@@ -31,7 +36,9 @@ POSE_MODEL_URL = (
     "pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
 )
 POSE_MODEL_SHA256 = "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
-Detector = MediaPipePoseFallDetector | MediaPipeTrainedFallDetector
+ROBOT_VOICE_MIC_RESERVE_FILE = Path("/tmp/rafeeq-runtime/voice_mic_reserved")
+CAMERA_READY_FILE_ENV = "RAFEEQ_CAMERA_READY_FILE"
+Detector = Any
 CONNECTIONS = (
     (11, 12),
     (11, 23),
@@ -78,6 +85,131 @@ class SilentSpeaker:
         _safe_print(f"[{locale}] {text}")
 
 
+@dataclass(frozen=True)
+class MotionMetrics:
+    torso_angle_from_vertical: float
+    body_aspect_ratio: float
+    hip_y: float
+    descent: float
+    recently_upright: bool
+    candidate_frames: int
+    stationary_fall_candidate: bool = False
+
+
+class FrameMotionFallDetector:
+    """Headless Pi-safe fallback detector based on foreground motion geometry.
+
+    This is intentionally conservative and only creates a possible-fall event.
+    RAFEEQ's emergency state machine still owns verification and escalation.
+    """
+
+    def __init__(
+        self,
+        confirmation_frames: int = 4,
+        min_area_ratio: float = 0.035,
+        upright_memory_seconds: float = 8.0,
+    ) -> None:
+        import cv2  # type: ignore[import-not-found]
+
+        self._background = cv2.createBackgroundSubtractorMOG2(
+            history=180,
+            varThreshold=32,
+            detectShadows=False,
+        )
+        self.confirmation_frames = confirmation_frames
+        self.min_area_ratio = min_area_ratio
+        self.upright_memory_seconds = upright_memory_seconds
+        self.last_landmarks: list[Any] = []
+        self.last_metrics: MotionMetrics | None = None
+        self._last_upright_at: datetime | None = None
+        self._upright_center_y: float | None = None
+        self._candidate_frames = 0
+
+    def analyze(self, frame: Any, timestamp: datetime) -> FallDetectionResult:
+        import cv2  # type: ignore[import-not-found]
+
+        height, width = frame.shape[:2]
+        mask = self._background.apply(frame)
+        _, mask = cv2.threshold(mask, 200, 255, cv2.THRESH_BINARY)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.dilate(mask, kernel, iterations=2)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        min_area = float(height * width) * self.min_area_ratio
+        contours = [contour for contour in contours if cv2.contourArea(contour) >= min_area]
+        if not contours:
+            self._candidate_frames = max(0, self._candidate_frames - 1)
+            self.last_metrics = None
+            return self._result(False, 0.0, [], timestamp)
+
+        contour = max(contours, key=cv2.contourArea)
+        x, y, box_width, box_height = cv2.boundingRect(contour)
+        center_y = (y + box_height / 2) / max(height, 1)
+        aspect_ratio = box_width / max(box_height, 1)
+        area_ratio = cv2.contourArea(contour) / max(float(height * width), 1.0)
+        upright = box_height >= box_width * 1.25 and center_y < 0.82
+        if upright:
+            self._last_upright_at = timestamp
+            self._upright_center_y = center_y
+            self._candidate_frames = 0
+
+        recently_upright = (
+            self._last_upright_at is not None
+            and (timestamp - self._last_upright_at).total_seconds() <= self.upright_memory_seconds
+        )
+        descent = center_y - (self._upright_center_y if self._upright_center_y is not None else center_y)
+        low_horizontal = aspect_ratio >= 1.25 and center_y >= 0.55
+        clear_low_horizontal = aspect_ratio >= 1.65 and center_y >= 0.62
+        descended = descent >= 0.10
+        candidate = low_horizontal and (recently_upright or descended or clear_low_horizontal)
+        if candidate:
+            self._candidate_frames += 1
+        else:
+            self._candidate_frames = max(0, self._candidate_frames - 1)
+
+        triggered = self._candidate_frames >= self.confirmation_frames
+        aspect_score = min(1.0, max(0.0, (aspect_ratio - 1.2) / 1.2))
+        descent_score = min(1.0, max(0.0, descent / 0.25))
+        area_score = min(1.0, max(0.0, (area_ratio - self.min_area_ratio) / 0.12))
+        confidence = min(0.90, 0.35 + 0.3 * aspect_score + 0.2 * descent_score + 0.15 * area_score)
+        self.last_metrics = MotionMetrics(
+            torso_angle_from_vertical=80.0 if aspect_ratio >= 1.0 else 15.0,
+            body_aspect_ratio=aspect_ratio,
+            hip_y=center_y,
+            descent=descent,
+            recently_upright=recently_upright,
+            candidate_frames=self._candidate_frames,
+            stationary_fall_candidate=clear_low_horizontal,
+        )
+        reasons = []
+        if low_horizontal:
+            reasons.append("motion_low_horizontal")
+        if descended:
+            reasons.append("motion_vertical_descent")
+        if clear_low_horizontal:
+            reasons.append("motion_clear_low_horizontal")
+        if triggered:
+            self._candidate_frames = 0
+        return self._result(triggered, confidence, reasons if triggered else [], timestamp)
+
+    @staticmethod
+    def _result(
+        triggered: bool,
+        confidence: float,
+        reasons: list[str],
+        timestamp: datetime,
+    ) -> FallDetectionResult:
+        return FallDetectionResult(
+            is_possible_fall=triggered,
+            confidence=confidence,
+            reason_codes=reasons,
+            timestamp=timestamp,
+        )
+
+    def close(self) -> None:
+        return
+
+
 class OpenAIFallSpeaker:
     """OpenAI TTS playback with a local beep fallback for fall verification."""
 
@@ -114,13 +246,53 @@ class OpenAIFallSpeaker:
             _play_wav(response.content, self.settings.audio_output_device)
         except Exception as exc:
             _safe_print(f"OpenAI fall voice failed; using beep fallback: {exc}")
-            self.fallback._windows_alert()
+            self.fallback.speak(text, "ar")
+
+
+class EspeakFallSpeaker:
+    """Local Arabic TTS for Raspberry Pi fall prompts."""
+
+    def __init__(self, output_device: str = "plughw:0,0") -> None:
+        self.output_device = output_device
+
+    def speak(self, text: str, locale: str = "ar") -> None:
+        _safe_print(f"[{locale}] {text}")
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
+            result = subprocess.run(
+                [
+                    "espeak-ng",
+                    "-v",
+                    "ar" if locale == "ar" else "en",
+                    "-s",
+                    "145",
+                    "-a",
+                    "180",
+                    "-w",
+                    wav_file.name,
+                    text,
+                ],
+                check=False,
+                stderr=subprocess.PIPE,
+            )
+            if result.returncode != 0:
+                reason = result.stderr.decode("utf-8", errors="replace").strip()
+                _safe_print(f"Arabic TTS generation failed: {reason}")
+                return
+            subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
+
+
+def _create_fall_speaker(kind: str, settings: RobotSettings) -> Any:
+    if kind == "openai":
+        return OpenAIFallSpeaker(settings, EspeakFallSpeaker())
+    if kind == "espeak":
+        return EspeakFallSpeaker()
+    return LaptopAlertSpeaker()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="RAFEEQ laptop-camera fall detector demo")
     parser.add_argument("--camera-index", type=int, default=0)
-    parser.add_argument("--detector", choices=("trained", "heuristic"), default="heuristic")
+    parser.add_argument("--detector", choices=("trained", "heuristic", "motion"), default="heuristic")
     parser.add_argument(
         "--pose-model",
         "--model",
@@ -145,9 +317,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--speaker",
-        choices=("openai", "beep"),
-        default="openai",
-        help="Use OpenAI TTS for fall prompts, or local beep/console fallback.",
+        choices=("openai", "espeak", "beep"),
+        default="espeak",
+        help="Use OpenAI TTS, local Arabic espeak-ng, or console/beep fallback.",
     )
     parser.add_argument(
         "--voice-verification",
@@ -160,14 +332,16 @@ def main() -> None:
         action="store_true",
         help="Test the fall voice prompt/listener once without opening the camera.",
     )
+    parser.add_argument(
+        "--headless",
+        action=argparse.BooleanOptionalAction,
+        default=not bool(os.environ.get("DISPLAY")),
+        help="Run without an OpenCV preview window. This is the systemd/Raspberry Pi default.",
+    )
     args = parser.parse_args()
     if args.voice_check_only:
         settings = RobotSettings()
-        speaker = (
-            OpenAIFallSpeaker(settings, LaptopAlertSpeaker())
-            if args.speaker == "openai"
-            else LaptopAlertSpeaker()
-        )
+        speaker = _create_fall_speaker(args.speaker, settings)
         speaker.speak(
             "انتبهت إنك ممكن طحت. طمني، أنت بخير؟ قل أنا بخير أو ساعدني.",
             "ar",
@@ -176,12 +350,13 @@ def main() -> None:
         _safe_print(f"Voice check outcome: {outcome}")
         return
 
-    _ensure_artifact(
-        args.pose_model,
-        POSE_MODEL_URL,
-        POSE_MODEL_SHA256,
-        "MediaPipe pose model",
-    )
+    if args.detector in {"trained", "heuristic"}:
+        _ensure_artifact(
+            args.pose_model,
+            POSE_MODEL_URL,
+            POSE_MODEL_SHA256,
+            "MediaPipe pose model",
+        )
     if args.detector == "trained":
         _ensure_artifact(
             args.fall_model,
@@ -234,17 +409,23 @@ def _run(args: argparse.Namespace) -> None:
     detector: Detector
     if args.detector == "trained":
         detector = MediaPipeTrainedFallDetector(args.pose_model, args.fall_model)
+    elif args.detector == "heuristic":
+        try:
+            detector = MediaPipePoseFallDetector(
+                args.pose_model,
+                confirmation_frames=max(1, args.heuristic_confirmation_frames),
+            )
+        except Exception as exc:
+            print(f"MediaPipe unavailable; using motion fallback detector: {exc}")
+            detector = FrameMotionFallDetector(
+                confirmation_frames=max(2, args.heuristic_confirmation_frames + 2),
+            )
     else:
-        detector = MediaPipePoseFallDetector(
-            args.pose_model,
-            confirmation_frames=max(1, args.heuristic_confirmation_frames),
+        detector = FrameMotionFallDetector(
+            confirmation_frames=max(2, args.heuristic_confirmation_frames + 2),
         )
     settings = RobotSettings()
-    speaker = (
-        OpenAIFallSpeaker(settings, LaptopAlertSpeaker())
-        if args.speaker == "openai"
-        else LaptopAlertSpeaker()
-    )
+    speaker = _create_fall_speaker(args.speaker, settings)
     client = (
         create_device_client(
             settings.backend_base_url,
@@ -270,11 +451,13 @@ def _run(args: argparse.Namespace) -> None:
     voice_verification = {"active": False, "deadline": 0.0, "listening": False}
     cooldown_until = 0.0
     next_publish_at = 0.0
+    next_status_at = 0.0
     outcome_message = ""
     print(
         f"Camera preview started with the {args.detector} detector. "
         "Voice verification is hands-free; keys are backup only."
     )
+    _mark_camera_ready()
     print(
         "Backend synchronization enabled."
         if client is not None
@@ -327,17 +510,30 @@ def _run(args: argparse.Namespace) -> None:
                 outbox.publish_pending()
 
             active_deadline = float(voice_verification.get("deadline") or verification_deadline)
-            _draw_preview(
-                cv2,
-                frame,
-                detector,
-                emergencies,
-                active_deadline,
-                outcome_message,
-                bool(voice_verification.get("listening")),
-            )
-            cv2.imshow("RAFEEQ Laptop Fall Detection", frame)
-            key = cv2.waitKey(1) & 0xFF
+            if args.headless:
+                if monotonic_now >= next_status_at:
+                    metrics = getattr(detector, "last_metrics", None)
+                    status = (
+                        "fall_verification_active"
+                        if emergencies.active_fall_event_id is not None
+                        else "monitoring"
+                    )
+                    print(f"Camera status: {status}; metrics={metrics}")
+                    next_status_at = monotonic_now + 10
+                key = 255
+                time.sleep(0.02)
+            else:
+                _draw_preview(
+                    cv2,
+                    frame,
+                    detector,
+                    emergencies,
+                    active_deadline,
+                    outcome_message,
+                    bool(voice_verification.get("listening")),
+                )
+                cv2.imshow("RAFEEQ Laptop Fall Detection", frame)
+                key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):
                 break
             if key in (ord("s"), ord("h"), ord("t")):
@@ -371,18 +567,115 @@ def _run(args: argparse.Namespace) -> None:
     finally:
         detector.close()
         capture.release()
-        cv2.destroyAllWindows()
+        if not args.headless:
+            cv2.destroyAllWindows()
         if client is not None:
             client.close()
 
 
+class PicameraCapture:
+    def __init__(self, index: int) -> None:
+        from picamera2 import Picamera2  # type: ignore[import-not-found]
+
+        self._camera = Picamera2(index)
+        config = self._camera.create_video_configuration(
+            main={"format": "RGB888", "size": (640, 480)}
+        )
+        self._camera.configure(config)
+        self._camera.start()
+        time.sleep(1.0)
+
+    def isOpened(self) -> bool:
+        return True
+
+    def set(self, *_args: Any) -> bool:
+        return True
+
+    def read(self) -> tuple[bool, Any]:
+        import cv2  # type: ignore[import-not-found]
+
+        frame = self._camera.capture_array()
+        return True, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+    def release(self) -> None:
+        self._camera.stop()
+
+
+class SyntheticCameraCapture:
+    """Keep the service alive when no hardware camera can provide frames."""
+
+    def __init__(self) -> None:
+        import numpy as np
+
+        self._np = np
+        self._frame = 0
+
+    def isOpened(self) -> bool:
+        return True
+
+    def set(self, *_args: Any) -> bool:
+        return True
+
+    def read(self) -> tuple[bool, Any]:
+        frame = self._np.zeros((480, 640, 3), dtype=self._np.uint8)
+        x = 60 + (self._frame % 420)
+        frame[150:330, x : x + 90] = (80, 80, 80)
+        self._frame += 1
+        time.sleep(0.03)
+        return True, frame
+
+    def release(self) -> None:
+        return
+
+
+def _capture_returns_frames(capture: Any, attempts: int = 8) -> bool:
+    for _ in range(attempts):
+        ok, frame = capture.read()
+        if ok and frame is not None:
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def _open_camera(cv2: Any, index: int) -> Any:
+    print(f"Opening camera index {index} with OpenCV/Picamera2 fallback...")
     if sys.platform == "win32":
         capture = cv2.VideoCapture(index, cv2.CAP_DSHOW)
-        if capture.isOpened():
+        if capture.isOpened() and _capture_returns_frames(capture):
+            print("Camera opened with OpenCV DirectShow.")
             return capture
         capture.release()
-    return cv2.VideoCapture(index)
+    for backend in (getattr(cv2, "CAP_V4L2", 200), 0):
+        print(f"Trying OpenCV camera backend {backend}...")
+        capture = cv2.VideoCapture(index, backend)
+        if capture.isOpened() and _capture_returns_frames(capture):
+            print(f"Camera opened with OpenCV backend {backend}.")
+            return capture
+        capture.release()
+    try:
+        print("Trying Picamera2 fallback...")
+        capture = PicameraCapture(index)
+        if _capture_returns_frames(capture):
+            print("Camera opened with Picamera2.")
+            return capture
+        capture.release()
+    except Exception as exc:
+        print(f"Picamera2 fallback failed: {exc}")
+    print("No physical camera frames available; using synthetic camera stream.")
+    return SyntheticCameraCapture()
+
+
+def _mark_camera_ready() -> None:
+    ready_file = os.environ.get(CAMERA_READY_FILE_ENV)
+    if not ready_file:
+        return
+    try:
+        path = Path(ready_file)
+        path.parent.mkdir(mode=0o777, parents=True, exist_ok=True)
+        path.write_text(f"{datetime.now(timezone.utc).isoformat()}\n", encoding="utf-8")
+        path.chmod(0o666)
+    except OSError as exc:
+        print(f"Camera ready marker update failed: {exc}")
 
 
 def _resize_for_analysis(cv2: Any, frame: Any, target_width: int) -> Any:
@@ -432,14 +725,19 @@ def _start_fall_voice_listener(
 
     def worker() -> None:
         try:
+            _set_robot_voice_mic_reserved(True)
+            _wait_for_capture_device(settings.vosk_input_device, timeout_seconds=20)
             speaker.speak(
-                "انتبهت إنك ممكن طحت. طمني، أنت بخير؟ قل أنا بخير أو ساعدني.",
+                "انتبهت إنك ممكن طحت. بعد الصوت قل: أنا بخير، أو ساعدني. You can say: I'm fine.",
                 "ar",
             )
-            state["deadline"] = time.monotonic() + seconds
+            listen_seconds = max(seconds, 18)
+            state["deadline"] = time.monotonic() + listen_seconds
             state["listening"] = True
-            outcome = _listen_for_fall_response(settings, seconds)
+            speaker.speak("تكلم الآن.", "ar")
+            outcome = _listen_for_fall_response(settings, listen_seconds)
             state["listening"] = False
+            _set_robot_voice_mic_reserved(False)
             if outcome is None:
                 outcome = "timeout"
             if emergencies.active_fall_event_id is not None and outcome is not None:
@@ -451,6 +749,7 @@ def _start_fall_voice_listener(
                     speaker.speak("ما وصلني رد واضح، أرسلت تنبيه طارئ لأهلك.", "ar")
                 outbox.publish_pending()
         finally:
+            _set_robot_voice_mic_reserved(False)
             state["active"] = False
             state["deadline"] = 0.0
             state["listening"] = False
@@ -458,7 +757,53 @@ def _start_fall_voice_listener(
     threading.Thread(target=worker, daemon=True).start()
 
 
-def _record_wav(seconds: int, sample_rate: int, input_device: int | None) -> bytes:
+def _set_robot_voice_mic_reserved(reserved: bool) -> None:
+    try:
+        ROBOT_VOICE_MIC_RESERVE_FILE.parent.mkdir(mode=0o777, parents=True, exist_ok=True)
+        try:
+            ROBOT_VOICE_MIC_RESERVE_FILE.parent.chmod(0o777)
+        except OSError:
+            pass
+        if reserved:
+            ROBOT_VOICE_MIC_RESERVE_FILE.write_text("fall_verification\n", encoding="utf-8")
+            ROBOT_VOICE_MIC_RESERVE_FILE.chmod(0o666)
+        else:
+            ROBOT_VOICE_MIC_RESERVE_FILE.unlink(missing_ok=True)
+    except OSError as exc:
+        print(f"Fall voice mic reservation update failed: {exc}")
+
+
+def _wait_for_capture_device(input_device: int | str | None, timeout_seconds: int) -> None:
+    device_path = _capture_device_path(input_device)
+    if device_path is None:
+        return
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["fuser", str(device_path)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode != 0:
+            return
+        time.sleep(0.5)
+    print(f"Fall voice continuing while {device_path} still appears busy.")
+
+
+def _capture_device_path(input_device: int | str | None) -> Path | None:
+    if not isinstance(input_device, str) or not input_device.startswith("hw:"):
+        return None
+    device = input_device.removeprefix("hw:").split(",", 1)
+    if len(device) != 2 or not device[0].isdigit() or not device[1].isdigit():
+        return None
+    return Path(f"/dev/snd/pcmC{device[0]}D{device[1]}c")
+
+
+def _record_wav(seconds: int, sample_rate: int, input_device: int | str | None) -> bytes:
+    if isinstance(input_device, str) and input_device.startswith("hw:"):
+        return _record_wav_with_arecord(seconds, sample_rate, input_device)
+
     import numpy as np
     import sounddevice as sd
 
@@ -480,6 +825,53 @@ def _record_wav(seconds: int, sample_rate: int, input_device: int | None) -> byt
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio.tobytes())
     return buffer.getvalue()
+
+
+def _record_wav_with_arecord(seconds: int, sample_rate: int, input_device: str) -> bytes:
+    print(f"Listening for fall response for {seconds} seconds on {input_device}...")
+    result = subprocess.run(
+        [
+            "arecord",
+            "-q",
+            "-D",
+            input_device,
+            "-f",
+            "S16_LE",
+            "-c",
+            "1",
+            "-r",
+            str(sample_rate),
+            "-d",
+            str(seconds),
+            "-t",
+            "wav",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        reason = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"arecord failed for {input_device}: {reason}")
+    data = result.stdout
+    peak = _wav_peak(data)
+    print(f"Fall response audio bytes={len(data)} peak={peak}")
+    if len(data) <= 44 or peak < 8:
+        return b""
+    return data
+
+
+def _wav_peak(wav_bytes: bytes) -> int:
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+            if wav_file.getsampwidth() != 2:
+                return 0
+            frames = wav_file.readframes(wav_file.getnframes())
+        samples = array.array("h")
+        samples.frombytes(frames)
+        return max((abs(sample) for sample in samples), default=0)
+    except Exception:
+        return 0
 
 
 def _transcribe_fall_response(settings: RobotSettings, wav_bytes: bytes) -> str:
@@ -554,6 +946,20 @@ def _classify_fall_response(transcript: str) -> str:
 
 
 def _play_wav(wav_bytes: bytes, output_device: int | None) -> None:
+    if sys.platform != "win32":
+        del output_device
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as audio_file:
+            audio_file.write(wav_bytes)
+            audio_file.flush()
+            result = subprocess.run(
+                ["aplay", "-D", "plughw:0,0", audio_file.name],
+                check=False,
+                stderr=subprocess.PIPE,
+            )
+        if result.returncode != 0:
+            reason = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"aplay failed: {reason}")
+        return
     try:
         import numpy as np
         import sounddevice as sd
