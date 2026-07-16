@@ -1,0 +1,16 @@
+[Unit]
+Description=RAFEEQ Camera Fall Detection Service
+After=network-online.target rafeeq-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rafeeq
+WorkingDirectory=/opt/rafeeq
+EnvironmentFile=/etc/rafeeq/robot.env
+ExecStart=/bin/bash -lc 'source /etc/rafeeq/robot.env && /opt/rafeeq/edge/robot/.venv/bin/rafeeq-fall-demo --camera-index "${CAMERA_INDEX:-0}" --detector heuristic --speaker openai --voice-verification --verification-timeout "${FALL_VERIFICATION_TIMEOUT_SECONDS:-10}"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -10,7 +10,13 @@ dependencies = ["pydantic>=2.10,<3", "pydantic-settings>=2.6,<3", "sqlalchemy>=2
 
 [project.optional-dependencies]
 dev = ["mypy>=1.13,<2", "pytest>=8.3,<9", "ruff>=0.8,<1"]
-voice = ["openai>=1.0,<3", "websockets>=13,<16"]
+voice = [
+  "openai>=1.0,<3",
+  "websockets>=13,<16",
+  "sounddevice>=0.5,<1",
+  "vosk>=0.3.45,<1",
+  "piper-tts>=1.2,<2",
+]
 vision = [
   "joblib==1.5.2",
   "mediapipe>=0.10.20,<0.11",

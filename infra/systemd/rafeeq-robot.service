@@ -5,12 +5,11 @@ After=network-online.target
 [Service]
 Type=simple
 User=rafeeq
-WorkingDirectory=/opt/rafeeq/edge/robot
+WorkingDirectory=/opt/rafeeq
 EnvironmentFile=/etc/rafeeq/robot.env
-ExecStart=/opt/rafeeq/.venv/bin/rafeeq-robot
+ExecStart=/opt/rafeeq/edge/robot/.venv/bin/rafeeq-robot
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-

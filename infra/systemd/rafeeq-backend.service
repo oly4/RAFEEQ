@@ -1,0 +1,16 @@
+[Unit]
+Description=RAFEEQ Backend Service
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rafeeq
+WorkingDirectory=/opt/rafeeq/services/backend
+EnvironmentFile=/etc/rafeeq/backend.env
+ExecStart=/opt/rafeeq/services/backend/.venv/bin/python -m uvicorn rafeeq_backend.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
