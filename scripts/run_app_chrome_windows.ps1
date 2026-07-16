@@ -1,5 +1,7 @@
 param(
-    [int]$BackendPort = 8000
+    [int]$BackendPort = 8000,
+    [string]$BackendHost = "127.0.0.1",
+    [switch]$RemoteBackend
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,11 +31,16 @@ function Wait-HttpOk([string]$Url, [int]$Seconds) {
 
 Set-Location $RepoRoot
 
-$BackendHealthUrl = "http://127.0.0.1:$BackendPort/health/ready"
-$BackendApiUrl = "http://127.0.0.1:$BackendPort/api/v1"
-$BackendWsUrl = "ws://127.0.0.1:$BackendPort"
+$UseRemoteBackend = $RemoteBackend -or ($BackendHost -ne "127.0.0.1" -and $BackendHost -ne "localhost")
+$BackendHealthHost = if ($UseRemoteBackend) { $BackendHost } else { "127.0.0.1" }
+$BackendHealthUrl = "http://$BackendHealthHost`:$BackendPort/health/ready"
+$BackendApiUrl = "http://$BackendHost`:$BackendPort/api/v1"
+$BackendWsUrl = "ws://$BackendHost`:$BackendPort"
 
 if (-not (Test-HttpOk $BackendHealthUrl)) {
+    if ($UseRemoteBackend) {
+        throw "Remote RAFEEQ backend is not reachable at $BackendHealthUrl. Make sure the Raspberry Pi backend is running and both devices are on the same network."
+    }
     Write-Host "Starting RAFEEQ backend on port $BackendPort..."
     $BackendPython = Join-Path $RepoRoot "services\backend\.venv\Scripts\python.exe"
     if (-not (Test-Path $BackendPython)) {
@@ -51,7 +58,11 @@ if (-not (Test-HttpOk $BackendHealthUrl)) {
         throw "Backend did not become ready. Check .run\backend.err.log"
     }
 } else {
-    Write-Host "Backend already running."
+    if ($UseRemoteBackend) {
+        Write-Host "Remote backend is reachable: $BackendHealthUrl"
+    } else {
+        Write-Host "Backend already running."
+    }
 }
 
 $Flutter = "C:\flutter\bin\flutter.bat"

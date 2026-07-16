@@ -1,7 +1,9 @@
 param(
     [int]$BackendPort = 8000,
+    [string]$BackendHost = "127.0.0.1",
     [int]$WebPort = 8080,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$RemoteBackend
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,13 +60,19 @@ function Stop-PortListener([int]$Port) {
 Set-Location $RepoRoot
 
 $LanIp = Get-RafeeqLanIp
-$BackendHealthUrl = "http://127.0.0.1:$BackendPort/health/ready"
-$BackendApiUrl = "http://$LanIp`:$BackendPort/api/v1"
-$BackendWsUrl = "ws://$LanIp`:$BackendPort"
+$UseRemoteBackend = $RemoteBackend -or ($BackendHost -ne "127.0.0.1" -and $BackendHost -ne "localhost")
+$BackendHealthHost = if ($UseRemoteBackend) { $BackendHost } else { "127.0.0.1" }
+$BackendClientHost = if ($UseRemoteBackend) { $BackendHost } else { $LanIp }
+$BackendHealthUrl = "http://$BackendHealthHost`:$BackendPort/health/ready"
+$BackendApiUrl = "http://$BackendClientHost`:$BackendPort/api/v1"
+$BackendWsUrl = "ws://$BackendClientHost`:$BackendPort"
 $AppUrl = "http://127.0.0.1:$WebPort"
 $BuildDir = Join-Path $MobileDir "build\web"
 
 if (-not (Test-HttpOk $BackendHealthUrl)) {
+    if ($UseRemoteBackend) {
+        throw "Remote RAFEEQ backend is not reachable at $BackendHealthUrl. Make sure the Raspberry Pi backend is running and both devices are on the same network."
+    }
     Write-Host "Starting RAFEEQ backend on port $BackendPort..."
     $BackendPython = Join-Path $RepoRoot "services\backend\.venv\Scripts\python.exe"
     if (-not (Test-Path $BackendPython)) {
@@ -82,7 +90,11 @@ if (-not (Test-HttpOk $BackendHealthUrl)) {
         throw "Backend did not become ready. Check .run\backend.err.log"
     }
 } else {
-    Write-Host "Backend already running."
+    if ($UseRemoteBackend) {
+        Write-Host "Remote backend is reachable: $BackendHealthUrl"
+    } else {
+        Write-Host "Backend already running."
+    }
 }
 
 if (-not $SkipBuild -or -not (Test-Path (Join-Path $BuildDir "index.html"))) {
@@ -134,6 +146,7 @@ Write-Host ""
 Write-Host "RAFEEQ is ready."
 Write-Host "App:      $AppUrl"
 Write-Host "Backend:  $BackendHealthUrl"
+Write-Host "API:      $BackendApiUrl"
 Write-Host "LAN app:  http://$LanIp`:$WebPort"
 Write-Host ""
 Write-Host "Family account:"
