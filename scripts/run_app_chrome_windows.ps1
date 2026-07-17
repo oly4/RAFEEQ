@@ -73,8 +73,8 @@ if (-not (Test-Path $Flutter)) {
 Write-Host "Starting RAFEEQ directly in Google Chrome..."
 Write-Host "Keep this window open while testing. Press q here to stop Flutter."
 Write-Host ""
-Write-Host "Family: rafeeq.family.test@example.com / Rafeeq-Test-2026!"
-Write-Host "Doctor: rafeeq.doctor.test@example.com / Rafeeq-Test-2026!"
+Write-Host "Family: caregiver@demo.rafeeq.app / Rafeeq-Test-2026!"
+Write-Host "Doctor: doctor@demo.rafeeq.app / Rafeeq-Test-2026!"
 Write-Host ""
 
 Set-Location $MobileDir
