@@ -7,6 +7,7 @@ import httpx
 
 from websockets.sync.client import connect
 
+from rafeeq_robot.application.language import choose_locale_text, detect_spoken_locale
 from rafeeq_robot.application.reminder_service import ReminderService, RoutineTaskStatus
 from rafeeq_robot.application.voice_interactor import VoiceIntentRouter, VoiceResult
 from rafeeq_robot.hardware.interfaces import SpeakerAdapter
@@ -43,32 +44,41 @@ class OpenAIRealtimeVoiceAgent:
         self.timeout_seconds = timeout_seconds
 
     def handle_text(self, transcript: str, source: str = "openai_realtime") -> VoiceResult:
+        locale = detect_spoken_locale(transcript)
         if not self.api_key:
             print("OpenAI API key is not configured; using safety command router.")
             return self.fallback.handle_text(transcript, source)
-        try:
-            message = self._ask_openai(transcript)
-        except Exception as exc:
-            print(f"GPT Realtime unavailable; trying OpenAI text model: {exc}")
+        if self._realtime_enabled():
             try:
-                message = self._ask_openai_text(transcript, source)
+                message = self._ask_openai(transcript, locale)
+            except Exception as exc:
+                print(f"GPT Realtime unavailable; trying OpenAI text model: {exc}")
+                try:
+                    message = self._ask_openai_text(transcript, source, locale)
+                except Exception as text_exc:
+                    print(f"OpenAI text model unavailable; using safety command router: {text_exc}")
+                    return self.fallback.handle_text(transcript, source)
+        else:
+            try:
+                message = self._ask_openai_text(transcript, source, locale)
             except Exception as text_exc:
                 print(f"OpenAI text model unavailable; using safety command router: {text_exc}")
                 return self.fallback.handle_text(transcript, source)
         if not message:
             return self.fallback.handle_text(transcript, source)
-        self.speaker.speak(message, "ar")
+        self.speaker.speak(message, locale)
         self.fallback.outbox.record(
             "voice_command_recognized",
             {
                 "intent": "openai_conversation",
                 "confidence": 0.8,
                 "source": source,
+                "locale": locale,
             },
         )
         return VoiceResult("openai_conversation", True, message)
 
-    def _ask_openai(self, transcript: str) -> str:
+    def _ask_openai(self, transcript: str, locale: str) -> str:
         url = f"wss://api.openai.com/v1/realtime?model={self.model}"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -80,23 +90,24 @@ class OpenAIRealtimeVoiceAgent:
             open_timeout=self.timeout_seconds,
             close_timeout=5,
         ) as ws:
-            self._send_session(ws)
-            self._send_user_message(ws, transcript)
+            self._send_session(ws, locale)
+            self._send_user_message(ws, transcript, locale)
             return self._collect_response(ws)
 
-    def _ask_openai_text(self, transcript: str, source: str) -> str:
+    def _ask_openai_text(self, transcript: str, source: str, locale: str) -> str:
         task_context = [task_status_to_dict(item) for item in self.reminders.list_task_statuses()]
         payload: dict[str, Any] = {
             "model": self.text_model,
             "instructions": _TEXT_PLANNER_INSTRUCTIONS,
             "input": (
                 f"User said: {transcript}\n\n"
+                f"Detected response language: {_locale_name(locale)}\n\n"
                 "Current synced RAFEEQ tasks JSON:\n"
                 f"{json.dumps(task_context, ensure_ascii=False)}"
             ),
             "max_output_tokens": 600,
         }
-        if self.reasoning_effort:
+        if self.reasoning_effort and _supports_reasoning_effort(self.text_model):
             payload["reasoning"] = {"effort": self.reasoning_effort}
         response = httpx.post(
             "https://api.openai.com/v1/responses",
@@ -114,16 +125,17 @@ class OpenAIRealtimeVoiceAgent:
         plan = _parse_json_object(raw_text)
         if plan is None:
             return raw_text
-        return self._execute_plan(plan, transcript, source)
+        return self._execute_plan(plan, transcript, source, locale)
 
-    def _send_session(self, ws: Any) -> None:
+    def _send_session(self, ws: Any, locale: str) -> None:
         ws.send(
             json.dumps(
                 {
                     "type": "session.update",
                     "session": {
                         "modalities": ["text"],
-                        "instructions": _SYSTEM_INSTRUCTIONS,
+                        "instructions": _SYSTEM_INSTRUCTIONS
+                        + f"\nDetected response language for this turn: {_locale_name(locale)}.",
                         "tools": _TOOLS,
                         "tool_choice": "auto",
                     },
@@ -131,7 +143,7 @@ class OpenAIRealtimeVoiceAgent:
             )
         )
 
-    def _send_user_message(self, ws: Any, transcript: str) -> None:
+    def _send_user_message(self, ws: Any, transcript: str, locale: str) -> None:
         task_context = [task_status_to_dict(item) for item in self.reminders.list_task_statuses()]
         ws.send(
             json.dumps(
@@ -145,6 +157,7 @@ class OpenAIRealtimeVoiceAgent:
                                 "type": "input_text",
                                 "text": (
                                     f"User said: {transcript}\n\n"
+                                    f"Detected response language: {_locale_name(locale)}\n\n"
                                     "Current synced RAFEEQ tasks JSON:\n"
                                     f"{json.dumps(task_context, ensure_ascii=False)}"
                                 ),
@@ -248,49 +261,99 @@ class OpenAIRealtimeVoiceAgent:
             return {"handled": True, "event_id": event_id}
         if name == "send_app_action":
             action = str(arguments.get("action") or "unknown")
-            assistant_text = str(arguments.get("assistant_text") or _default_action_text(action))
+            locale = str(arguments.get("locale") or arguments.get("language") or "ar")
+            provided_text = str(arguments.get("assistant_text") or "")
+            if locale not in {"ar", "en"}:
+                locale = detect_spoken_locale(provided_text) if provided_text else "ar"
+            assistant_text = str(
+                provided_text or _default_action_text(action, locale)
+            )
             self._record_app_action(action, "", assistant_text)
             return {"handled": True, "action": action}
         return {"error": f"Unknown tool: {name}"}
+
+    def _realtime_enabled(self) -> bool:
+        return self.model.strip().lower() not in {"", "off", "none", "disabled", "false", "0"}
 
     def _execute_plan(
         self,
         plan: dict[str, Any],
         transcript: str,
         source: str,
+        locale: str,
     ) -> str:
         del source
         action = str(plan.get("action") or "answer")
         assistant_text = str(plan.get("assistant_text") or "").strip()
         query = str(plan.get("query") or transcript)
         if action == "answer":
-            return assistant_text or "أبشر، وش تحتاج؟"
+            return assistant_text or choose_locale_text(locale, "أبشر، وش تحتاج؟", "Sure. What do you need?")
         if action == "complete_task":
             status = self.reminders.complete_best_match(query)
             if status is None:
-                return "ما لقيت المهمة المقصودة. قل اسمها بعد يا رفيق."
-            return assistant_text or f"تم، علّمت {status.title} كمنجزة."
+                return choose_locale_text(
+                    locale,
+                    "ما لقيت المهمة المقصودة. قل اسمها بعد يا رفيق.",
+                    "I could not find that task. Say its name after Rafeeq.",
+                )
+            return assistant_text or choose_locale_text(
+                locale,
+                f"تم، علّمت {status.title} كمنجزة.",
+                f"Done. I marked {status.title} as complete.",
+            )
         if action == "snooze_task":
             minutes = _bounded_minutes(plan.get("minutes"), 10)
             status = self.reminders.snooze_best_match(query, minutes)
             if status is None:
-                return "ما لقيت المهمة المقصودة عشان أؤجلها."
-            return assistant_text or f"تم، بأذكرك في {status.title} بعد {minutes} دقائق."
+                return choose_locale_text(
+                    locale,
+                    "ما لقيت المهمة المقصودة عشان أؤجلها.",
+                    "I could not find that task to snooze it.",
+                )
+            return assistant_text or choose_locale_text(
+                locale,
+                f"تم، بأذكرك في {status.title} بعد {minutes} دقائق.",
+                f"Done. I will remind you about {status.title} in {minutes} minutes.",
+            )
         if action == "decline_task":
             status = self.reminders.miss_best_match(query)
             if status is None:
-                return "ما لقيت المهمة المقصودة عشان أسجلها كغير منجزة."
-            return assistant_text or f"تم، سجلت أن {status.title} لم تكتمل الآن."
+                return choose_locale_text(
+                    locale,
+                    "ما لقيت المهمة المقصودة عشان أسجلها كغير منجزة.",
+                    "I could not find that task to mark it as missed.",
+                )
+            return assistant_text or choose_locale_text(
+                locale,
+                f"تم، سجلت أن {status.title} لم تكتمل الآن.",
+                f"Done. I recorded that {status.title} was not completed now.",
+            )
         if action == "undo_complete_task":
             status = self.reminders.undo_best_match_completion(query)
             if status is None:
-                return "ما لقيت مهمة مكتملة أشيل منها علامة تم."
-            return assistant_text or f"تم، شلت علامة الإنجاز من {status.title}."
+                return choose_locale_text(
+                    locale,
+                    "ما لقيت مهمة مكتملة أشيل منها علامة تم.",
+                    "I could not find a completed task to undo.",
+                )
+            return assistant_text or choose_locale_text(
+                locale,
+                f"تم، شلت علامة الإنجاز من {status.title}.",
+                f"Done. I removed the completed mark from {status.title}.",
+            )
         if action == "request_help":
             if self.fallback.emergencies is None:
-                return "خدمة الطوارئ غير جاهزة الآن."
+                return choose_locale_text(
+                    locale,
+                    "خدمة الطوارئ غير جاهزة الآن.",
+                    "Emergency service is not ready right now.",
+                )
             self.fallback.emergencies.trigger_sos()
-            return assistant_text or "تم طلب المساعدة. ابق هادئاً، سيتم تنبيه العائلة."
+            return assistant_text or choose_locale_text(
+                locale,
+                "تم طلب المساعدة. ابق هادئاً، سيتم تنبيه العائلة.",
+                "Help has been requested. Stay calm; your family will be alerted.",
+            )
         if action in {
             "open_album",
             "open_activities",
@@ -305,7 +368,7 @@ class OpenAIRealtimeVoiceAgent:
             "complete_routine",
             "undo_complete_routine",
         }:
-            message = assistant_text or _default_action_text(action)
+            message = assistant_text or _default_action_text(action, locale)
             self._record_app_action(action, transcript, message)
             return message
         if action in {"start_activity", "request_add_task", "request_edit_task", "request_delete_task"}:
@@ -315,7 +378,7 @@ class OpenAIRealtimeVoiceAgent:
                 "request_edit_task": "edit_routine",
                 "request_delete_task": "delete_routine",
             }[action]
-            message = _default_action_text(mapped_action)
+            message = _default_action_text(mapped_action, locale)
             if action == "request_add_task":
                 routine = plan.get("routine")
                 if isinstance(routine, dict) and routine.get("title") and routine.get("time_24h"):
@@ -323,7 +386,11 @@ class OpenAIRealtimeVoiceAgent:
                     return message
             self._record_app_action(mapped_action, transcript, message)
             return message
-        return assistant_text or "ما فهمت الطلب كامل. قل يا رفيق ثم الأمر بهدوء."
+        return assistant_text or choose_locale_text(
+            locale,
+            "ما فهمت الطلب كامل. قل يا رفيق ثم الأمر بهدوء.",
+            "I did not fully understand. Say Rafeeq, then the command calmly.",
+        )
 
     def _record_app_action(self, action: str, transcript: str, assistant_text: str) -> None:
         self.fallback.outbox.record(
@@ -436,8 +503,8 @@ def _bounded_minutes(value: Any, default: int) -> int:
     return max(1, min(120, minutes))
 
 
-def _default_action_text(action: str) -> str:
-    return {
+def _default_action_text(action: str, locale: str = "ar") -> str:
+    arabic = {
         "open_dashboard": "تم، فتحت لك الصفحة الرئيسية.",
         "open_routine": "تم، فتحت لك الروتين.",
         "open_activities": "تم، فتحت لك الأنشطة.",
@@ -450,15 +517,40 @@ def _default_action_text(action: str) -> str:
         "delete_routine": "تم، فتحت لك حذف المهمة.",
         "complete_routine": "تم، حدثت حالة المهمة.",
         "undo_complete_routine": "تم، حدثت حالة المهمة.",
-    }.get(action, "تم.")
+    }
+    english = {
+        "open_dashboard": "Done. I opened the dashboard.",
+        "open_routine": "Done. I opened the routine.",
+        "open_activities": "Done. I opened activities.",
+        "open_album": "Done. I opened the album.",
+        "open_settings": "Done. I opened settings.",
+        "start_poem_test": "Sure. We can start the poem exercise.",
+        "start_photo_test": "Done. We can start the photo exercise.",
+        "add_routine": "Done. I added the task.",
+        "edit_routine": "Done. I opened task editing.",
+        "delete_routine": "Done. I opened task deletion.",
+        "complete_routine": "Done. I updated the task status.",
+        "undo_complete_routine": "Done. I updated the task status.",
+    }
+    table = english if locale == "en" else arabic
+    return table.get(action, "Done." if locale == "en" else "تم.")
+
+
+def _locale_name(locale: str) -> str:
+    return "English" if locale == "en" else "Arabic"
+
+
+def _supports_reasoning_effort(model: str) -> bool:
+    return model.startswith("gpt-5")
 
 
 _SYSTEM_INSTRUCTIONS = """
-You are RAFEEQ, a calm Saudi Najdi/Riyadh-style elderly-care voice assistant.
-Understand Arabic and English, but speak the final answer in short, natural Saudi
-Najdi/Riyadh Arabic. Be respectful, warm like family, and use neutral wording that
-works for any patient gender. Prefer gentle phrases like "أبشر", "تم", "وش تقصد؟",
-and "ما لقيت المهمة" without exaggerating slang.
+You are RAFEEQ, a calm elderly-care voice assistant.
+Understand both Arabic and English. Always answer in the same language as the
+patient's latest message: Arabic input gets short natural Saudi Najdi/Riyadh
+Arabic, and English input gets short clear English. If the message is mixed,
+use the dominant language. Be respectful, warm like family, and use neutral
+wording that works for any patient gender.
 You are not a doctor. Never diagnose, recommend doses, or change medication.
 For task, routine, meal, water, activity, or medication status questions, use the
 available tools instead of guessing. If records are missing, say that no synced
@@ -469,8 +561,8 @@ photo exercises, and poem exercises. Do not directly create caregiver-owned
 schedules from patient voice; ask the caregiver to confirm schedule changes.
 Do not claim a task or medicine was completed unless the tool output says it is
 completed. Keep answers one sentence unless the user asks for details.
-Do not use Markdown, bullets, asterisks, emoji, or English status labels in spoken
-answers. Translate stored status values into natural Arabic before speaking.
+Do not use Markdown, bullets, asterisks, emoji, or raw status labels in spoken
+answers. Translate stored status values into the response language before speaking.
 """.strip()
 
 
@@ -495,7 +587,7 @@ _TEXT_PLANNER_INSTRUCTIONS = (
     "title:string, time_24h:'HH:MM', description:string|null, medication:null or "
     "{medication_name:string,dosage_text:string,instructions:string|null}}. "
     "If the user says appointment, use type appointment. If they say task without a specific type, use custom. "
-    "Required JSON keys: action, assistant_text, query, minutes, routine. Keep assistant_text plain spoken Arabic and do not claim success before "
+    "Required JSON keys: action, assistant_text, query, minutes, routine. Keep assistant_text in the detected response language and do not claim success before "
     "the robot executes the action."
 )
 
@@ -613,6 +705,7 @@ _TOOLS = [
                     ],
                 },
                 "assistant_text": {"type": "string"},
+                "locale": {"type": "string", "enum": ["ar", "en"]},
             },
             "required": ["action", "assistant_text"],
             "additionalProperties": False,

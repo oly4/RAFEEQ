@@ -1,3 +1,5 @@
+import threading
+
 from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.hardware.interfaces import SpeakerAdapter
 
@@ -35,7 +37,7 @@ class EmergencyManager:
 
     def trigger_sos(self) -> str:
         event = self.outbox.record("sos_pressed", {})
-        self._speak("sos")
+        threading.Thread(target=self._speak, args=("sos",), daemon=True).start()
         return event.event_id
 
     def trigger_possible_fall(self, confidence: float, reason_codes: list[str]) -> str:

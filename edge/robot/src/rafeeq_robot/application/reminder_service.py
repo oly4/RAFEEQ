@@ -24,10 +24,12 @@ class ReminderService:
         database: RobotDatabase,
         outbox: OutboxService,
         speaker: SpeakerAdapter,
+        spoken_reminders_enabled: bool = True,
     ) -> None:
         self.database = database
         self.outbox = outbox
         self.speaker = speaker
+        self.spoken_reminders_enabled = spoken_reminders_enabled
 
     def run_due(self, now: datetime | None = None) -> list[str]:
         current = now or datetime.now(timezone.utc)
@@ -56,13 +58,18 @@ class ReminderService:
                 occurrence.prompted_at = current
                 self.outbox.record_in_session(
                     session,
-                    "reminder_spoken",
-                    {"occurrence_id": occurrence.id, "routine_id": routine.id},
+                    "reminder_spoken" if self.spoken_reminders_enabled else "reminder_silenced",
+                    {
+                        "occurrence_id": occurrence.id,
+                        "routine_id": routine.id,
+                        "spoken": self.spoken_reminders_enabled,
+                    },
                     current,
                 )
                 spoken.append((occurrence.id, message))
-        for _, message in spoken:
-            self.speaker.speak(message, "ar")
+        if self.spoken_reminders_enabled:
+            for _, message in spoken:
+                self.speaker.speak(message, "ar")
         return [occurrence_id for occurrence_id, _ in spoken]
 
     def complete(self, occurrence_id: str, source: str = "manual") -> None:

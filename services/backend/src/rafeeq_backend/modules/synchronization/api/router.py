@@ -5,15 +5,19 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from rafeeq_backend.models import (
+    ActivityDefinition,
     CaregiverPatient,
     MedicationDetail,
+    MemoryItem,
     Patient,
     Routine,
     RoutineOccurrence,
     utc_now,
 )
+from rafeeq_backend.modules.activities.domain.schemas import SavedPoemResponse
 from rafeeq_backend.modules.auth.api.dependencies import DbSession
 from rafeeq_backend.modules.devices.api.dependencies import CurrentDevice
+from rafeeq_backend.modules.memories.domain.schemas import MemoryItemResponse
 from rafeeq_backend.modules.routines.domain.schemas import RoutineCreate, RoutineResponse
 from rafeeq_backend.modules.synchronization.domain.schemas import (
     DeviceStatusResponse,
@@ -23,6 +27,45 @@ from rafeeq_backend.modules.synchronization.domain.schemas import (
 )
 
 router = APIRouter(prefix="/device-api/v1", tags=["device-api"])
+
+
+@router.get("/activities/poems", response_model=list[SavedPoemResponse])
+def device_saved_poems(device: CurrentDevice, db: DbSession) -> list[SavedPoemResponse]:
+    poems = list(
+        db.scalars(
+            select(ActivityDefinition)
+            .where(
+                ActivityDefinition.patient_id == device.patient_id,
+                ActivityDefinition.type == "poem_completion",
+                ActivityDefinition.is_active.is_(True),
+            )
+            .order_by(ActivityDefinition.created_at.desc())
+        ).all()
+    )
+    return [
+        SavedPoemResponse(
+            id=poem.id,
+            title=poem.title,
+            poem_start=poem.description or "",
+            expected_completion=poem.instructions or "",
+        )
+        for poem in poems
+    ]
+
+
+@router.get("/memories", response_model=list[MemoryItemResponse])
+def device_saved_memories(device: CurrentDevice, db: DbSession) -> list[MemoryItemResponse]:
+    memories = list(
+        db.scalars(
+            select(MemoryItem)
+            .where(
+                MemoryItem.patient_id == device.patient_id,
+                MemoryItem.deleted_at.is_(None),
+            )
+            .order_by(MemoryItem.created_at.desc())
+        ).all()
+    )
+    return [MemoryItemResponse.model_validate(memory) for memory in memories]
 
 
 @router.get("/sync/snapshot", response_model=SyncSnapshot)

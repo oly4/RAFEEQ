@@ -1,12 +1,17 @@
 [Unit]
 Description=RAFEEQ Robot Service
-After=network-online.target
+After=network-online.target rafeeq-backend.service sound.target
+Wants=network-online.target rafeeq-backend.service
 
 [Service]
 Type=simple
 User=rafeeq
-WorkingDirectory=/opt/rafeeq
+WorkingDirectory=-/tmp/rafeeq-runtime
 EnvironmentFile=/etc/rafeeq/robot.env
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=+/usr/bin/bash -lc 'set -a; . /etc/rafeeq/robot.env; set +a; for _ in $(seq 1 60); do /usr/bin/curl -fsS "${BACKEND_BASE_URL:-http://127.0.0.1:8000}/health/ready" >/dev/null 2>&1 && exit 0; sleep 1; done; echo "Backend health was not ready before robot start; continuing with offline voice behavior." >&2; exit 0'
+ExecStartPre=+/usr/bin/install -d -o rafeeq -g rafeeq -m 0775 /tmp/rafeeq-runtime
+ExecStartPre=+/usr/bin/bash -lc '/usr/bin/runuser -u bayan -- env XDG_RUNTIME_DIR=/run/user/1000 /usr/bin/systemctl --user mask --now pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber >/dev/null 2>&1 || true; /usr/bin/runuser -u bayan -- env XDG_RUNTIME_DIR=/run/user/1000 /usr/bin/systemctl --user reset-failed pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber >/dev/null 2>&1 || true; /usr/bin/fuser -k /dev/snd/pcm*C*c >/dev/null 2>&1 || true'
 ExecStart=/opt/rafeeq/edge/robot/.venv/bin/rafeeq-robot --daemon
 Restart=always
 RestartSec=5

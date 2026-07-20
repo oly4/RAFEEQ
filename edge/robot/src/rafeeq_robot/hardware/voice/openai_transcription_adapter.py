@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import io
+import array
+import math
+import subprocess
 from typing import Any
 import wave
 
@@ -60,7 +63,7 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
             headers={"Authorization": f"Bearer {self._api_key}"},
             data={"model": self._model, "response_format": "json"},
             files={"file": ("rafeeq-microphone.wav", wav_bytes, "audio/wav")},
-            timeout=max(30, timeout_seconds + 30),
+            timeout=max(12, timeout_seconds + 8),
         )
         response.raise_for_status()
         data = response.json()
@@ -68,6 +71,10 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
         return text.strip() if isinstance(text, str) and text.strip() else None
 
     def _record_wav(self, seconds: int) -> bytes:
+        if isinstance(self._input_device, str) and self._input_device.startswith(
+            ("hw:", "plughw:")
+        ):
+            return self._record_wav_with_arecord(seconds, self._input_device)
         try:
             audio = self._sd.rec(
                 int(seconds * self._sample_rate),
@@ -79,7 +86,8 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
             self._sd.wait()
         finally:
             self._sd.stop()
-        if float(self._np.max(self._np.abs(audio))) < self._silence_threshold:
+        rms = float(self._np.sqrt(self._np.mean(self._np.square(audio.astype(self._np.float64)))))
+        if rms < self._silence_threshold:
             return b""
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav_file:
@@ -88,3 +96,48 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
             wav_file.setframerate(self._sample_rate)
             wav_file.writeframes(audio.tobytes())
         return buffer.getvalue()
+
+    def _record_wav_with_arecord(self, seconds: int, input_device: str) -> bytes:
+        result = subprocess.run(
+            [
+                "arecord",
+                "-q",
+                "-D",
+                input_device,
+                "-f",
+                "S16_LE",
+                "-c",
+                "1",
+                "-r",
+                str(self._sample_rate),
+                "-d",
+                str(seconds),
+                "-t",
+                "wav",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            reason = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"arecord failed for {input_device}: {reason}")
+        data = result.stdout
+        if len(data) <= 44 or _wav_rms(data) < self._silence_threshold:
+            return b""
+        return data
+
+
+def _wav_rms(wav_bytes: bytes) -> float:
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+            if wav_file.getsampwidth() != 2:
+                return 0.0
+            frames = wav_file.readframes(wav_file.getnframes())
+        samples = array.array("h")
+        samples.frombytes(frames)
+        if not samples:
+            return 0.0
+        return math.sqrt(sum(float(sample) * float(sample) for sample in samples) / len(samples))
+    except Exception:
+        return 0.0

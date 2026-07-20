@@ -20,6 +20,7 @@ class CameraState:
 
     def _run(self) -> None:
         import cv2  # type: ignore[import-not-found]
+        import numpy as np  # type: ignore[import-not-found]
 
         capture: Any | None = None
         picamera: Any | None = None
@@ -50,6 +51,7 @@ class CameraState:
                         time.sleep(0.1)
                         continue
 
+                frame = _auto_color_bgr(frame, cv2, np)
                 ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
                 if ok:
                     with self.lock:
@@ -60,6 +62,25 @@ class CameraState:
                 picamera.stop()
             if capture is not None:
                 capture.release()
+
+
+def _auto_color_bgr(frame: Any, cv2: Any, np: Any) -> Any:
+    """Apply lightweight gray-world white balance and a gentle color lift."""
+
+    working = frame.astype(np.float32)
+    mask = np.all((working > 8) & (working < 248), axis=2)
+    pixels = working[mask]
+    if pixels.size:
+        means = pixels.mean(axis=0)
+        target = float(means.mean())
+        scales = np.divide(target, means, out=np.ones_like(means), where=means > 1)
+        working *= np.clip(scales, 0.75, 1.35)
+
+    balanced = np.clip(working, 0, 255).astype(np.uint8)
+    hsv = cv2.cvtColor(balanced, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.08, 0, 255)
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.03, 0, 255)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
 
 def make_handler(state: CameraState) -> type[BaseHTTPRequestHandler]:

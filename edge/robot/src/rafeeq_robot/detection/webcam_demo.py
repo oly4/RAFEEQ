@@ -282,10 +282,11 @@ class EspeakFallSpeaker:
 
 
 def _create_fall_speaker(kind: str, settings: RobotSettings) -> Any:
+    output_device = str(settings.audio_output_device or "plughw:0,0")
     if kind == "openai":
-        return OpenAIFallSpeaker(settings, EspeakFallSpeaker())
+        return OpenAIFallSpeaker(settings, EspeakFallSpeaker(output_device))
     if kind == "espeak":
-        return EspeakFallSpeaker()
+        return EspeakFallSpeaker(output_device)
     return LaptopAlertSpeaker()
 
 
@@ -731,7 +732,7 @@ def _start_fall_voice_listener(
                 "انتبهت إنك ممكن طحت. بعد الصوت قل: أنا بخير، أو ساعدني. You can say: I'm fine.",
                 "ar",
             )
-            listen_seconds = max(seconds, 18)
+            listen_seconds = max(seconds, settings.voice_listen_seconds, 8)
             state["deadline"] = time.monotonic() + listen_seconds
             state["listening"] = True
             speaker.speak("تكلم الآن.", "ar")
@@ -945,14 +946,14 @@ def _classify_fall_response(transcript: str) -> str:
     return "timeout"
 
 
-def _play_wav(wav_bytes: bytes, output_device: int | None) -> None:
+def _play_wav(wav_bytes: bytes, output_device: int | str | None) -> None:
     if sys.platform != "win32":
-        del output_device
+        device = str(output_device or "plughw:0,0")
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as audio_file:
             audio_file.write(wav_bytes)
             audio_file.flush()
             result = subprocess.run(
-                ["aplay", "-D", "plughw:0,0", audio_file.name],
+                ["aplay", "-D", device, audio_file.name],
                 check=False,
                 stderr=subprocess.PIPE,
             )

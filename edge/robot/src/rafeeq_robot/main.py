@@ -10,8 +10,11 @@ from uuid import uuid4
 from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[import-untyped]
 
 from rafeeq_robot.application.emergency_manager import EmergencyManager
+from rafeeq_robot.application.language import choose_locale_text, detect_spoken_locale
+from rafeeq_robot.application.memory_practice import MemoryPracticeService
 from rafeeq_robot.application.openai_voice_agent import OpenAIRealtimeVoiceAgent
 from rafeeq_robot.application.outbox_service import OutboxService
+from rafeeq_robot.application.poem_practice import PoemPracticeService
 from rafeeq_robot.application.reminder_service import ReminderService
 from rafeeq_robot.application.sync_service import SyncService
 from rafeeq_robot.application.voice_interactor import VoiceIntentRouter
@@ -57,7 +60,12 @@ def main() -> None:
         settings.rafeeq_patient_id,
         client,
     )
-    reminders = ReminderService(database, outbox, speaker)
+    reminders = ReminderService(
+        database,
+        outbox,
+        speaker,
+        spoken_reminders_enabled=settings.spoken_reminders_enabled,
+    )
     emergencies = EmergencyManager(outbox, speaker)
     local_voice = VoiceIntentRouter(
         reminders,
@@ -66,17 +74,21 @@ def main() -> None:
         emergencies=emergencies,
         snooze_minutes=settings.voice_reminder_snooze_minutes,
     )
+    sos_button = _start_sos_button_listener(settings, emergencies, outbox)
     voice = _create_voice_agent(settings, local_voice, reminders, speaker)
     voice_input = _create_voice_input(settings)
+    poems = PoemPracticeService(settings, outbox, speaker)
+    memories = MemoryPracticeService(settings, outbox, speaker)
     sync = SyncService(database, client) if client else None
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(reminders.run_due, "interval", seconds=5, max_instances=1)
     if client:
         scheduler.add_job(outbox.publish_pending, "interval", seconds=5, max_instances=1)
         if sync:
-            scheduler.add_job(sync.synchronize, "interval", seconds=60, max_instances=1)
+            scheduler.add_job(_synchronize_quietly, "interval", seconds=120, args=[sync], max_instances=1)
     scheduler.start()
-    speaker.speak("مرحبا انا رفيق")
+    if settings.startup_greeting_enabled:
+        speaker.speak("مرحبا انا رفيق")
     print(f"RAFEEQ robot started (hardware_mode={settings.hardware_mode})")
     print(
         "Commands: sync, due, complete <id>, demo-med-taken, listen, voice <text>, "
@@ -98,22 +110,97 @@ def main() -> None:
             except Exception as exc:
                 print(f"Initial synchronization failed; local behavior remains active: {exc}")
         if voice_input is not None:
-            _start_daemon_voice_loop(voice, voice_input, settings, speaker)
+            _start_daemon_voice_loop(voice, voice_input, settings, speaker, poems, memories)
         print("Daemon mode active.")
         try:
             while True:
                 time.sleep(3600)
         finally:
+            _close_sos_button(sos_button)
             scheduler.shutdown(wait=False)
             if client:
                 client.close()
         return
     try:
-        _command_loop(sync, reminders, voice, voice_input, settings, emergencies, outbox)
+        _command_loop(
+            sync,
+            reminders,
+            voice,
+            voice_input,
+            settings,
+            emergencies,
+            outbox,
+            poems,
+            memories,
+        )
     finally:
+        _close_sos_button(sos_button)
         scheduler.shutdown(wait=False)
         if client:
             client.close()
+
+
+def _start_sos_button_listener(
+    settings: RobotSettings,
+    emergencies: EmergencyManager,
+    outbox: OutboxService,
+) -> object | None:
+    if not settings.sos_button_enabled or settings.hardware_mode != "raspberry_pi":
+        return None
+    try:
+        from gpiozero import Button  # type: ignore[import-not-found]
+        from gpiozero.pins.lgpio import LGPIOFactory  # type: ignore[import-not-found]
+    except Exception as exc:
+        print(f"SOS button disabled: GPIO library unavailable: {exc}")
+        return None
+
+    last_pressed_at = 0.0
+    lock = threading.Lock()
+
+    def on_pressed() -> None:
+        nonlocal last_pressed_at
+        now = time.monotonic()
+        with lock:
+            if now - last_pressed_at < settings.sos_button_cooldown_seconds:
+                print("SOS button press ignored during cooldown.")
+                return
+            last_pressed_at = now
+        try:
+            event_id = emergencies.trigger_sos()
+            print(f"SOS button pressed; event queued: {event_id}")
+            outbox.publish_pending()
+        except Exception as exc:
+            print(f"SOS button handling failed: {exc}")
+
+    try:
+        factory = LGPIOFactory()
+        button = Button(
+            settings.sos_button_gpio,
+            pull_up=settings.sos_button_pull_up,
+            bounce_time=settings.sos_button_bounce_seconds,
+            pin_factory=factory,
+        )
+        button.when_pressed = on_pressed
+        wiring = "GPIO to GND" if settings.sos_button_pull_up else "GPIO to 3.3V"
+        print(f"SOS button active on BCM GPIO {settings.sos_button_gpio} ({wiring}).")
+        return button
+    except Exception as exc:
+        print(f"SOS button disabled: could not open GPIO {settings.sos_button_gpio}: {exc}")
+    return None
+
+
+def _synchronize_quietly(sync: SyncService) -> None:
+    try:
+        version = sync.synchronize()
+        print(f"Configuration sync complete: {version}")
+    except Exception as exc:
+        print(f"Configuration sync skipped; local voice remains active: {exc}")
+
+
+def _close_sos_button(button: object | None) -> None:
+    close = getattr(button, "close", None)
+    if callable(close):
+        close()
 
 
 def _start_daemon_voice_loop(
@@ -121,6 +208,8 @@ def _start_daemon_voice_loop(
     voice_input: VoiceInputAdapter,
     settings: RobotSettings,
     speaker: SpeakerAdapter,
+    poems: PoemPracticeService,
+    memories: MemoryPracticeService,
 ) -> None:
     def worker() -> None:
         description = getattr(voice_input, "description", "configured microphone")
@@ -167,12 +256,16 @@ def _start_daemon_voice_loop(
             if voice_paused or external_paused:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
                 if wake_command is not None and _is_start_hearing_command(wake_command or transcript):
+                    locale = detect_spoken_locale(wake_command or transcript)
                     voice_paused = False
                     _set_terminal_voice_paused(False)
                     external_pause_logged = False
                     pending_transcript = None
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
-                    speaker.speak("رجعت أسمعك.", "ar")
+                    speaker.speak(
+                        choose_locale_text(locale, "رجعت أسمعك.", "I am listening again."),
+                        locale,
+                    )
                     print("Voice listening resumed by wake command.")
                 else:
                     print("Voice paused: waiting for 'RafeeQ start hearing'.")
@@ -186,7 +279,11 @@ def _start_daemon_voice_loop(
                     continue
                 if wake_command is not None:
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
-                    speaker.speak("سمعتك.", "ar")
+                    locale = detect_spoken_locale(wake_command or transcript)
+                    speaker.speak(
+                        choose_locale_text(locale, "سمعتك.", "I heard you."),
+                        locale,
+                    )
                     if not wake_command:
                         time.sleep(0.5)
                         continue
@@ -196,17 +293,26 @@ def _start_daemon_voice_loop(
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     print("Voice transcript accepted during active wake session.")
             if _is_stop_hearing_command(transcript):
+                locale = detect_spoken_locale(transcript)
                 voice_paused = True
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
                 pending_transcript = None
                 awake_until = 0.0
-                speaker.speak("تم، وقفت سماع الأوامر. قل يا رفيق اسمعني عشان أرجع.", "ar")
+                speaker.speak(
+                    choose_locale_text(
+                        locale,
+                        "تم، وقفت سماع الأوامر. قل يا رفيق اسمعني عشان أرجع.",
+                        "Done. I stopped listening for commands. Say Rafeeq start hearing to bring me back.",
+                    ),
+                    locale,
+                )
                 print("Voice listening paused by command.")
                 time.sleep(0.5)
                 continue
             if _is_start_hearing_command(transcript):
-                speaker.speak("أنا أسمعك.", "ar")
+                locale = detect_spoken_locale(transcript)
+                speaker.speak(choose_locale_text(locale, "أنا أسمعك.", "I am listening."), locale)
                 print("Voice start-hearing command received while already active.")
                 time.sleep(0.5)
                 continue
@@ -217,30 +323,52 @@ def _start_daemon_voice_loop(
                         pending_transcript = None
                         print(f"Voice confirmed transcript: {format_console_text(transcript)}")
                     elif _is_voice_cancel(transcript):
+                        locale = detect_spoken_locale(transcript)
                         print(f"Voice cancelled transcript: {format_console_text(pending_transcript)}")
                         pending_transcript = None
-                        speaker.speak("تم، ألغيت الأمر.", "ar")
+                        speaker.speak(
+                            choose_locale_text(locale, "تم، ألغيت الأمر.", "Done. I cancelled it."),
+                            locale,
+                        )
                         time.sleep(0.5)
                         continue
                     else:
+                        locale = detect_spoken_locale(transcript)
                         pending_transcript = transcript
                         print(f"Voice pending transcript updated: {format_console_text(transcript)}")
                         speaker.speak(
-                            f"سمعت: {transcript}. قل تأكيد عشان أنفذ.",
-                            "ar",
+                            choose_locale_text(
+                                locale,
+                                f"سمعت: {transcript}. قل تأكيد عشان أنفذ.",
+                                f"I heard: {transcript}. Say confirm so I can do it.",
+                            ),
+                            locale,
                         )
                         time.sleep(0.5)
                         continue
                 elif not _is_voice_confirmation(transcript):
+                    locale = detect_spoken_locale(transcript)
                     pending_transcript = transcript
                     print(f"Voice pending transcript: {format_console_text(transcript)}")
                     speaker.speak(
-                        f"سمعت: {transcript}. قل تأكيد عشان أنفذ.",
-                        "ar",
+                        choose_locale_text(
+                            locale,
+                            f"سمعت: {transcript}. قل تأكيد عشان أنفذ.",
+                            f"I heard: {transcript}. Say confirm so I can do it.",
+                        ),
+                        locale,
                     )
                     time.sleep(0.5)
                     continue
             try:
+                if poems.can_handle(transcript) and poems.handle_text(transcript, voice_input):
+                    print("Voice intent: start_poem_test; handled=True")
+                    time.sleep(0.5)
+                    continue
+                if memories.can_handle(transcript) and memories.handle_text(transcript, voice_input):
+                    print("Voice intent: start_photo_test; handled=True")
+                    time.sleep(0.5)
+                    continue
                 result = voice.handle_text(
                     transcript,
                     source=settings.voice_interaction_provider,
@@ -364,7 +492,28 @@ def _extract_wake_command(transcript: str, wake_words: str) -> str | None:
         for pattern in wake_words.split(",")
         if pattern.strip()
     ]
-    patterns.extend(["يا رفيق", "يارفيق", "رفيق", "رفيج", "rafeeq", "rafeeq"])
+    patterns.extend(
+        [
+            "يا رفيق",
+            "يارفيق",
+            "رفيق",
+            "رفيج",
+            "رفيك",
+            "رافيق",
+            "رفيقو",
+            "rafeeq",
+            "rafeek",
+            "rafiq",
+            "rafik",
+            "rafique",
+            "rafig",
+            "dovek",
+            "dovik",
+            "dofek",
+            "صاحبنا",
+            "صاحبي",
+        ]
+    )
     for pattern in patterns:
         if not pattern:
             continue
@@ -401,11 +550,13 @@ def _normalize_wake_text(text: str) -> str:
 def _command_loop(
     sync: SyncService | None,
     reminders: ReminderService,
-    voice: VoiceIntentRouter,
+    voice: VoiceIntentRouter | OpenAIRealtimeVoiceAgent,
     voice_input: VoiceInputAdapter | None,
     settings: RobotSettings,
     emergencies: EmergencyManager,
     outbox: OutboxService,
+    poems: PoemPracticeService,
+    memories: MemoryPracticeService,
 ) -> None:
     while True:
         try:
@@ -432,7 +583,16 @@ def _command_loop(
             result = voice.handle_text("did you take medicine")
             print(f"Voice intent: {result.intent}; handled={result.handled}")
         elif command.startswith("voice "):
-            result = voice.handle_text(command.split(maxsplit=1)[1])
+            transcript = command.split(maxsplit=1)[1]
+            if voice_input is not None and poems.can_handle(transcript):
+                poems.handle_text(transcript, voice_input)
+                print("Voice intent: start_poem_test; handled=True")
+                continue
+            if voice_input is not None and memories.can_handle(transcript):
+                memories.handle_text(transcript, voice_input)
+                print("Voice intent: start_photo_test; handled=True")
+                continue
+            result = voice.handle_text(transcript)
             print(f"Voice intent: {result.intent}; handled={result.handled}")
         elif command.startswith("listen"):
             if voice_input is None:
@@ -448,6 +608,14 @@ def _command_loop(
                 print("No speech recognized.")
                 continue
             print(f"Transcript: {format_console_text(transcript)}")
+            if poems.can_handle(transcript):
+                poems.handle_text(transcript, voice_input)
+                print("Voice intent: start_poem_test; handled=True")
+                continue
+            if memories.can_handle(transcript):
+                memories.handle_text(transcript, voice_input)
+                print("Voice intent: start_photo_test; handled=True")
+                continue
             result = voice.handle_text(transcript, source=settings.voice_interaction_provider)
             print(f"Voice intent: {result.intent}; handled={result.handled}")
         elif command.startswith("mic-test"):
@@ -574,10 +742,14 @@ def _create_voice_agent(
 
 
 def _create_speaker(settings: RobotSettings) -> SpeakerAdapter:
+    output_device = str(settings.audio_output_device or "plughw:0,0")
     if settings.speaker_provider == "openai_tts":
-        return OpenAITTSSpeaker(settings, EspeakSpeaker(settings.speaker_rate, settings.speaker_volume))
+        return OpenAITTSSpeaker(
+            settings,
+            EspeakSpeaker(settings.speaker_rate, settings.speaker_volume, output_device),
+        )
     if settings.speaker_provider == "espeak":
-        return EspeakSpeaker(settings.speaker_rate, settings.speaker_volume)
+        return EspeakSpeaker(settings.speaker_rate, settings.speaker_volume, output_device)
     if settings.speaker_provider == "piper":
         return PiperSpeaker(
             settings.piper_voice_model,
@@ -590,9 +762,10 @@ def _create_speaker(settings: RobotSettings) -> SpeakerAdapter:
 
 
 class EspeakSpeaker:
-    def __init__(self, rate: int = 0, volume: int = 100) -> None:
+    def __init__(self, rate: int = 0, volume: int = 100, output_device: str = "plughw:0,0") -> None:
         self.rate = 150 + max(-10, min(10, rate)) * 10
         self.volume = max(0, min(200, volume * 2))
+        self.output_device = output_device
         self._lock = threading.Lock()
         self._speaking_until = 0.0
         self._last_speak_started = 0.0
@@ -629,7 +802,7 @@ class EspeakSpeaker:
                     stderr=subprocess.PIPE,
                 )
                 if result.returncode == 0:
-                    subprocess.run(["aplay", "-D", "plughw:0,0", wav_file.name], check=False)
+                    subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
             finally:
                 with self._lock:
                     self._speaking_until = time.monotonic() + 1.0
@@ -640,7 +813,7 @@ class OpenAITTSSpeaker:
         self.api_key = settings.openai_api_key
         self.model = settings.openai_tts_model
         self.voice = settings.openai_tts_voice
-        self.output_device = "plughw:0,0"
+        self.output_device = str(settings.audio_output_device or "plughw:0,0")
         self.fallback = fallback
         self._lock = threading.Lock()
         self._speaking_until = 0.0
@@ -677,7 +850,7 @@ class OpenAITTSSpeaker:
                     "input": clean_speech_text(text),
                     "response_format": "wav",
                 },
-                timeout=45,
+                timeout=15,
             )
             response.raise_for_status()
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
