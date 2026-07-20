@@ -1,11 +1,11 @@
 # RAFEEQ deployment from a Windows laptop
 
-This setup keeps the heavy backend services online and leaves the Flutter web
-app on your laptop during the prototype:
+This setup keeps the heavy backend services online and can also host the
+Flutter web app from the same VPS:
 
 - Cloud/VPS server: FastAPI backend, PostgreSQL, Redis, Mosquitto MQTT.
 - Raspberry Pi: robot voice, speaker, camera, fall detection.
-- Laptop: Flutter web app opened in Chrome.
+- Laptop: deploys and tests the Flutter web app.
 
 For London testing, use a VPS region in London when possible.
 
@@ -86,7 +86,19 @@ Family: caregiver@demo.rafeeq.app / Rafeeq-Test-2026!
 Doctor: doctor@demo.rafeeq.app / Rafeeq-Test-2026!
 ```
 
-## 6. Point the Raspberry Pi robot to the cloud backend
+## 6. Deploy the Flutter web app so any device can open it
+
+```powershell
+.\scripts\deploy_web_to_server.ps1 -ServerHost YOUR_SERVER_IP
+```
+
+Then open:
+
+```text
+http://YOUR_SERVER_IP
+```
+
+## 7. Point the Raspberry Pi robot to the cloud backend
 
 On the Raspberry Pi, set:
 
