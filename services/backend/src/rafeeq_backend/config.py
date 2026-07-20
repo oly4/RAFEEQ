@@ -4,8 +4,18 @@ from pathlib import Path
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ROOT_ENV = Path(__file__).resolve().parents[4] / ".env"
-ROBOT_ENV = Path(__file__).resolve().parents[4] / ".env.robot"
+
+def _find_repo_root() -> Path:
+    candidates = [Path.cwd(), *Path(__file__).resolve().parents]
+    for candidate in candidates:
+        if (candidate / "AGENTS.md").exists() or (candidate / ".env").exists():
+            return candidate
+    return Path.cwd()
+
+
+REPO_ROOT = _find_repo_root()
+ROOT_ENV = REPO_ROOT / ".env"
+ROBOT_ENV = REPO_ROOT / ".env.robot"
 
 
 class Settings(BaseSettings):

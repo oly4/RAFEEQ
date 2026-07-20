@@ -18,9 +18,10 @@ if (-not (Test-Path $EnvFile)) {
 }
 
 $target = "$ServerUser@$ServerHost"
+$sshOptions = @("-o", "StrictHostKeyChecking=accept-new")
 
 Write-Host "Installing server dependencies on $target..."
-ssh $target @"
+ssh @sshOptions $target @"
 set -e
 apt-get update
 apt-get install -y ca-certificates curl git ufw
@@ -30,7 +31,7 @@ if [ ! -f /etc/apt/keyrings/docker.asc ]; then
   chmod a+r /etc/apt/keyrings/docker.asc
 fi
 . /etc/os-release
-echo "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+echo "deb [arch=`$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu `${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ufw allow OpenSSH
@@ -47,10 +48,10 @@ fi
 "@
 
 Write-Host "Uploading production environment..."
-scp $EnvFile "$target`:$RemoteDir/.env.production"
+scp @sshOptions $EnvFile "$target`:$RemoteDir/.env.production"
 
 Write-Host "Starting RAFEEQ backend stack..."
-ssh $target @"
+ssh @sshOptions $target @"
 set -e
 cd "$RemoteDir"
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
