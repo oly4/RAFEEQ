@@ -59,51 +59,54 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Form(
-                key: formKey,
-                child: Column(children: [
-                  RafeeqRobot(
-                    semanticLabel: strings.robotSemanticLabel,
-                    size: 108,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    widget.registerMode
-                        ? strings.createAccount
-                        : strings.welcomeBack,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 7),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: RafeeqColors.lavender,
-                      borderRadius: BorderRadius.circular(999),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RafeeqGradients.pageFor(Theme.of(context).brightness),
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Form(
+                  key: formKey,
+                  child: Column(children: [
+                    RafeeqRobot(
+                      semanticLabel: strings.robotSemanticLabel,
+                      size: 108,
                     ),
-                    child: Text(
-                      accessLabel,
-                      style: const TextStyle(
-                        color: RafeeqColors.primaryDark,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(height: 12),
+                    Text(
+                      widget.registerMode
+                          ? strings.createAccount
+                          : strings.welcomeBack,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: RafeeqColors.lavender,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        accessLabel,
+                        style: const TextStyle(
+                          color: RafeeqColors.primaryDark,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    strings.secureAccessSubtitle,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: RafeeqColors.muted),
-                  ),
-                  const SizedBox(height: 24),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
+                    const SizedBox(height: 7),
+                    Text(
+                      strings.secureAccessSubtitle,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: RafeeqColors.muted),
+                    ),
+                    const SizedBox(height: 24),
+                    RafeeqGlowCard(
+                      hero: true,
                       child: Column(children: [
                         if (widget.registerMode) ...[
                           TextFormField(
@@ -216,27 +219,27 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         ),
                       ]),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => context.go(
-                      widget.registerMode
-                          ? '/login?role=$selectedRole'
-                          : '/register?role=$selectedRole',
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => context.go(
+                        widget.registerMode
+                            ? '/login?role=$selectedRole'
+                            : '/register?role=$selectedRole',
+                      ),
+                      child: Text(
+                        widget.registerMode
+                            ? strings.login
+                            : strings.createAccount,
+                      ),
                     ),
-                    child: Text(
-                      widget.registerMode
-                          ? strings.login
-                          : strings.createAccount,
+                    const SizedBox(height: 8),
+                    Text(
+                      strings.byContinuing,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    strings.byContinuing,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ]),
+                  ]),
+                ),
               ),
             ),
           ),

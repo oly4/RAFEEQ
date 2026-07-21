@@ -14,14 +14,11 @@ class WelcomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final strings = AppLocalizations.of(context)!;
     final session = ref.watch(appSessionProvider);
+    final brightness = Theme.of(context).brightness;
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.45),
-            radius: 0.8,
-            colors: [Color(0xFFF0E7FF), RafeeqColors.lavenderSoft],
-          ),
+        decoration: BoxDecoration(
+          gradient: RafeeqGradients.pageFor(brightness),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) => SingleChildScrollView(
@@ -187,72 +184,72 @@ class _RoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = emphasized ? Colors.white : RafeeqColors.primary;
-    return Material(
-      color: emphasized ? RafeeqColors.primary : const Color(0xFFFAF7FF),
-      borderRadius: BorderRadius.circular(23),
-      elevation: emphasized ? 5 : 1,
-      shadowColor: RafeeqColors.primary.withValues(alpha: 0.22),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(23),
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 102),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(23),
-            border: Border.all(
-              color: emphasized ? RafeeqColors.primary : RafeeqColors.outline,
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+    final textColor =
+        emphasized || isDark ? Colors.white : RafeeqColors.primary;
+    final subtitleColor = emphasized
+        ? Colors.white.withValues(alpha: 0.86)
+        : isDark
+            ? RafeeqColors.mutedDark
+            : RafeeqColors.muted;
+    return RafeeqGlowCard(
+      onTap: onTap,
+      hero: emphasized,
+      radius: 28,
+      glowColor: emphasized ? RafeeqColors.primary : RafeeqColors.primaryDark,
+      gradient: emphasized
+          ? RafeeqGradients.primary
+          : RafeeqGradients.aliveCardFor(brightness),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 102),
+        child: Row(children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: emphasized
+                ? Colors.white.withValues(alpha: 0.15)
+                : isDark
+                    ? const Color(0xFF35265F)
+                    : RafeeqColors.lavender,
+            child: Icon(icon, color: textColor),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: subtitleColor,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
-          child: Row(children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: emphasized
-                  ? Colors.white.withValues(alpha: 0.15)
-                  : RafeeqColors.lavender,
-              child: Icon(icon, color: textColor),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: emphasized
-                          ? Colors.white.withValues(alpha: 0.86)
-                          : RafeeqColors.muted,
-                      fontSize: 11,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Directionality.of(context) == TextDirection.rtl
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
-              color: textColor,
-              size: 20,
-            ),
-          ]),
-        ),
+          Icon(
+            Directionality.of(context) == TextDirection.rtl
+                ? Icons.chevron_left_rounded
+                : Icons.chevron_right_rounded,
+            color: textColor,
+            size: 20,
+          ),
+        ]),
       ),
     );
   }

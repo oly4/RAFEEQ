@@ -15,14 +15,11 @@ class RoleEntryScreen extends StatelessWidget {
     final strings = AppLocalizations.of(context)!;
     final isDoctor = role == 'doctor';
     final roleLabel = isDoctor ? strings.doctorAccess : strings.familyAccess;
+    final brightness = Theme.of(context).brightness;
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.2),
-            radius: 0.85,
-            colors: [Color(0xFFF0E7FF), RafeeqColors.lavenderSoft],
-          ),
+        decoration: BoxDecoration(
+          gradient: RafeeqGradients.pageFor(brightness),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) => SingleChildScrollView(
@@ -89,20 +86,25 @@ class RoleEntryScreen extends StatelessWidget {
                           color: RafeeqColors.muted, fontSize: 12),
                     ),
                     const Spacer(flex: 2),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () => context.go('/login?role=$role'),
-                        child: Text(strings.login),
-                      ),
-                    ),
-                    const SizedBox(height: 11),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => context.go('/register?role=$role'),
-                        child: Text(strings.createAccount),
-                      ),
+                    RafeeqGlowCard(
+                      hero: true,
+                      child: Column(children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () => context.go('/login?role=$role'),
+                            child: Text(strings.login),
+                          ),
+                        ),
+                        const SizedBox(height: 11),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => context.go('/register?role=$role'),
+                            child: Text(strings.createAccount),
+                          ),
+                        ),
+                      ]),
                     ),
                     const SizedBox(height: 12),
                     Text(
