@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme.dart';
-import '../../../../core/auth/providers.dart';
 import '../../../../core/widgets/rafeeq_robot.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../widgets/onboarding_quick_settings.dart';
 
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
@@ -13,7 +13,6 @@ class WelcomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final strings = AppLocalizations.of(context)!;
-    final session = ref.watch(appSessionProvider);
     final brightness = Theme.of(context).brightness;
     return Scaffold(
       body: DecoratedBox(
@@ -28,6 +27,11 @@ class WelcomeScreen extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                   child: Column(children: [
+                    const Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: OnboardingQuickSettings(),
+                    ),
+                    const SizedBox(height: 10),
                     _Brand(title: strings.appName),
                     const SizedBox(height: 12),
                     RafeeqRobot(
@@ -93,31 +97,6 @@ class WelcomeScreen extends ConsumerWidget {
                             strings.byContinuing,
                           ),
                           child: Text(strings.termsOfUse),
-                        ),
-                        IconButton(
-                          tooltip: strings.language,
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => session.changeLocale(
-                            session.locale.languageCode == 'ar' ? 'en' : 'ar',
-                          ),
-                          icon: const Icon(Icons.language_rounded, size: 17),
-                        ),
-                        IconButton(
-                          tooltip: session.locale.languageCode == 'ar'
-                              ? 'تغيير المظهر'
-                              : 'Change appearance',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => session.changeThemeMode(
-                            brightness == Brightness.dark
-                                ? ThemeMode.light
-                                : ThemeMode.dark,
-                          ),
-                          icon: Icon(
-                            brightness == Brightness.dark
-                                ? Icons.light_mode_rounded
-                                : Icons.dark_mode_rounded,
-                            size: 17,
-                          ),
                         ),
                       ],
                     ),

@@ -6,6 +6,7 @@ import '../../../../app/theme.dart';
 import '../../../../core/auth/providers.dart';
 import '../../../../core/widgets/rafeeq_robot.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../widgets/onboarding_quick_settings.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({
@@ -56,23 +57,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         title: Text(strings.appName),
-        actions: [
-          IconButton(
-            tooltip: session.locale.languageCode == 'ar'
-                ? 'تغيير المظهر'
-                : 'Change appearance',
-            onPressed: () => session.changeThemeMode(
-              Theme.of(context).brightness == Brightness.dark
-                  ? ThemeMode.light
-                  : ThemeMode.dark,
-            ),
-            icon: Icon(
-              Theme.of(context).brightness == Brightness.dark
-                  ? Icons.light_mode_rounded
-                  : Icons.dark_mode_rounded,
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         top: false,
@@ -88,6 +72,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 child: Form(
                   key: formKey,
                   child: Column(children: [
+                    const Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: OnboardingQuickSettings(),
+                    ),
+                    const SizedBox(height: 12),
                     RafeeqRobot(
                       semanticLabel: strings.robotSemanticLabel,
                       size: 108,
