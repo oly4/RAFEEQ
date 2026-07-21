@@ -27,15 +27,32 @@ class MemoriesPanel extends StatefulWidget {
 
 class _MemoriesPanelState extends State<MemoriesPanel> {
   late Future<Map<String, List<Map<String, dynamic>>>> future;
+  bool _photoTestAutoStarted = false;
 
   @override
   void initState() {
     super.initState();
     future = _load();
-    if (widget.startFirstPhotoTest) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _startFirstPhotoTest());
+    _queuePhotoTestIfRequested();
+  }
+
+  @override
+  void didUpdateWidget(covariant MemoriesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.startFirstPhotoTest && !oldWidget.startFirstPhotoTest) {
+      _queuePhotoTestIfRequested();
     }
+  }
+
+  void _queuePhotoTestIfRequested() {
+    if (!widget.startFirstPhotoTest || _photoTestAutoStarted) return;
+    _photoTestAutoStarted = true;
+    future.then((_) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startFirstPhotoTest();
+      });
+    });
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _load() async {

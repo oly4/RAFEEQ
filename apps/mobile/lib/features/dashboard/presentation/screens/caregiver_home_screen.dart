@@ -32,6 +32,7 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
   Timer? _voiceEventTimer;
   int _lastVoiceEventSequence = 0;
   bool _pollingVoiceEvents = false;
+  bool _voiceEventCursorReady = false;
 
   @override
   void initState() {
@@ -299,6 +300,22 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
       final data = response.data ?? const <String, dynamic>{};
       final rawItems = data['items'];
       final items = rawItems is List ? rawItems : const <Object?>[];
+      final latestSequence = (data['latest_sequence'] as num?)?.toInt();
+      if (!_voiceEventCursorReady) {
+        for (final rawItem in items) {
+          if (rawItem is! Map) continue;
+          final sequence = (rawItem['sequence'] as num?)?.toInt();
+          if (sequence != null && sequence > _lastVoiceEventSequence) {
+            _lastVoiceEventSequence = sequence;
+          }
+        }
+        if (latestSequence != null &&
+            latestSequence > _lastVoiceEventSequence) {
+          _lastVoiceEventSequence = latestSequence;
+        }
+        _voiceEventCursorReady = true;
+        return;
+      }
       for (final rawItem in items) {
         if (rawItem is! Map) continue;
         final event = Map<String, dynamic>.from(rawItem);
@@ -309,7 +326,6 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
         final action = event['action']?.toString() ?? 'unknown';
         await _applyVoiceAction(action, session);
       }
-      final latestSequence = (data['latest_sequence'] as num?)?.toInt();
       if (latestSequence != null && latestSequence > _lastVoiceEventSequence) {
         _lastVoiceEventSequence = latestSequence;
       }
