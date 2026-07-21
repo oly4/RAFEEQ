@@ -19,6 +19,7 @@ class AppSession extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   SessionStatus status = SessionStatus.loading;
   Locale locale = const Locale('ar');
+  ThemeMode themeMode = ThemeMode.system;
   AppUser? user;
   List<PatientSummary> patients = const [];
   String? accessToken;
@@ -38,6 +39,8 @@ class AppSession extends ChangeNotifier {
       if (savedLocale == 'ar' || savedLocale == 'en') {
         locale = Locale(savedLocale!);
       }
+      final savedThemeMode = await _safeRead('preferred_theme_mode');
+      themeMode = _themeModeFromStorage(savedThemeMode);
       accessToken = await _safeRead('access_token');
       refreshToken = await _safeRead('refresh_token');
       if (accessToken == null) {
@@ -167,6 +170,23 @@ class AppSession extends ChangeNotifier {
     locale = Locale(languageCode);
     unawaited(_safeWrite('preferred_locale', languageCode));
     notifyListeners();
+  }
+
+  void changeThemeMode(ThemeMode mode) {
+    themeMode = mode;
+    unawaited(_safeWrite('preferred_theme_mode', mode.name));
+    notifyListeners();
+  }
+
+  ThemeMode _themeModeFromStorage(String? value) {
+    switch (value) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
   }
 
   Future<bool> _run(Future<void> Function() action) async {

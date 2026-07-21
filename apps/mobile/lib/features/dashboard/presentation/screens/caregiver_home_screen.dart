@@ -114,7 +114,9 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
             : null,
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: RafeeqGradients.page),
+        decoration: BoxDecoration(
+          gradient: RafeeqGradients.pageFor(Theme.of(context).brightness),
+        ),
         child: IndexedStack(index: index, children: pages),
       ),
       floatingActionButton: index != 4
@@ -122,8 +124,12 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
               onPressed: () => _runGlobalVoiceCommand(session),
               icon: const Icon(Icons.mic_none_rounded),
               label: Text(strings.appName),
-              backgroundColor: const Color(0xFFF0E7FF),
-              foregroundColor: RafeeqColors.primary,
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF35265F)
+                  : const Color(0xFFF0E7FF),
+              foregroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFFF7F2FF)
+                  : RafeeqColors.primary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -1491,7 +1497,8 @@ class _DashboardTile extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                gradient: RafeeqGradients.softCard,
+                gradient:
+                    RafeeqGradients.softCardFor(Theme.of(context).brightness),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
@@ -1691,7 +1698,9 @@ class _RoutineTabState extends State<RoutineTab> {
                           ? const LinearGradient(
                               colors: [Color(0xFFE1F7EC), Colors.white],
                             )
-                          : RafeeqGradients.softCard,
+                          : RafeeqGradients.softCardFor(
+                              Theme.of(context).brightness,
+                            ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -2669,7 +2678,7 @@ class _EmergencyTabState extends State<EmergencyTab> {
                 end: AlignmentDirectional.bottomEnd,
                 colors: [Color(0xFFFFE8ED), Colors.white],
               )
-            : RafeeqGradients.aliveCard,
+            : RafeeqGradients.aliveCardFor(Theme.of(context).brightness),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Icon(active ? Icons.warning_amber : Icons.check_circle_outline),
@@ -3117,6 +3126,9 @@ class SettingsTab extends StatelessWidget {
   const SettingsTab({required this.session, super.key});
   final AppSession session;
 
+  String _copy(BuildContext context, String ar, String en) =>
+      Localizations.localeOf(context).languageCode == 'ar' ? ar : en;
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
@@ -3212,11 +3224,54 @@ class SettingsTab extends StatelessWidget {
         ]),
       ),
       const SizedBox(height: 12),
+      RafeeqGlowCard(
+        padding: EdgeInsets.zero,
+        child: Column(children: [
+          ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: RafeeqColors.lavender,
+              child:
+                  Icon(Icons.dark_mode_outlined, color: RafeeqColors.primary),
+            ),
+            title: Text(_copy(context, 'المظهر', 'Appearance')),
+            subtitle: Text(_copy(
+              context,
+              'اختر الوضع المناسب لعينك',
+              'Choose the look that feels comfortable',
+            )),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: SegmentedButton<ThemeMode>(
+              segments: [
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text(_copy(context, 'النظام', 'System')),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  label: Text(_copy(context, 'فاتح', 'Light')),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  label: Text(_copy(context, 'داكن', 'Dark')),
+                ),
+              ],
+              selected: {session.themeMode},
+              onSelectionChanged: (value) =>
+                  session.changeThemeMode(value.first),
+            ),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 12),
       OutlinedButton.icon(
         style: OutlinedButton.styleFrom(
           foregroundColor: RafeeqColors.danger,
           side: const BorderSide(color: Color(0xFFFFA9B8)),
-          backgroundColor: const Color(0xFFFFECEF),
+          backgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF351825)
+              : const Color(0xFFFFECEF),
         ),
         onPressed: session.logout,
         icon: const Icon(Icons.logout),

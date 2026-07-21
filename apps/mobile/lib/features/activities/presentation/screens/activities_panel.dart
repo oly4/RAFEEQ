@@ -108,8 +108,10 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
                   leading: Container(
                     width: 44,
                     height: 44,
-                    decoration: const BoxDecoration(
-                      gradient: RafeeqGradients.softCard,
+                    decoration: BoxDecoration(
+                      gradient: RafeeqGradients.softCardFor(
+                        Theme.of(context).brightness,
+                      ),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.psychology_alt_outlined),

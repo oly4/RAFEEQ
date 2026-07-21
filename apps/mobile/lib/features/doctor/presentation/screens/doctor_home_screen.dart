@@ -65,7 +65,9 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: RafeeqGradients.page),
+        decoration: BoxDecoration(
+          gradient: RafeeqGradients.pageFor(Theme.of(context).brightness),
+        ),
         child: FutureBuilder<List<DoctorPatientData>>(
           future: future,
           builder: (context, snapshot) {
@@ -1354,7 +1356,7 @@ class _DoctorEmergencyCard extends StatelessWidget {
               end: AlignmentDirectional.bottomEnd,
               colors: [Color(0xFFFFE8ED), Colors.white],
             )
-          : RafeeqGradients.aliveCard,
+          : RafeeqGradients.aliveCardFor(Theme.of(context).brightness),
       child: ListTile(
         onTap: () => showDialog<void>(
           context: context,

@@ -34,6 +34,8 @@ class RafeeqApp extends ConsumerWidget {
       },
       routerConfig: router,
       theme: buildRafeeqTheme(),
+      darkTheme: buildRafeeqDarkTheme(),
+      themeMode: session.themeMode,
     );
   }
 }
