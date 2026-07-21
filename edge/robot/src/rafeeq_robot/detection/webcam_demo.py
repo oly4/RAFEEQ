@@ -16,6 +16,7 @@ from pathlib import Path
 import tempfile
 from typing import Any
 import wave
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from rafeeq_robot.application.emergency_manager import EmergencyManager
 from rafeeq_robot.application.outbox_service import OutboxService
@@ -339,6 +340,23 @@ def main() -> None:
         default=not bool(os.environ.get("DISPLAY")),
         help="Run without an OpenCV preview window. This is the systemd/Raspberry Pi default.",
     )
+    parser.add_argument(
+        "--stream-host",
+        default="",
+        help="Optional MJPEG preview host. Use 127.0.0.1 with the SSH tunnel.",
+    )
+    parser.add_argument(
+        "--stream-port",
+        type=int,
+        default=0,
+        help="Optional MJPEG preview port. Set to 8090 for the app camera view.",
+    )
+    parser.add_argument(
+        "--warmup-seconds",
+        type=int,
+        default=10,
+        help="Ignore possible falls for this many seconds after camera startup.",
+    )
     args = parser.parse_args()
     if args.voice_check_only:
         settings = RobotSettings()
@@ -395,6 +413,7 @@ def _ensure_artifact(path: Path, url: str, expected_sha256: str, label: str) -> 
 
 def _run(args: argparse.Namespace) -> None:
     import cv2  # type: ignore[import-not-found]
+    import numpy as np  # type: ignore[import-not-found]
 
     capture = _open_camera(cv2, args.camera_index)
     if not capture.isOpened():
@@ -453,7 +472,11 @@ def _run(args: argparse.Namespace) -> None:
     cooldown_until = 0.0
     next_publish_at = 0.0
     next_status_at = 0.0
+    detection_enabled_at = 0.0
     outcome_message = ""
+    stream = _FrameStreamServer(args.stream_host, args.stream_port) if args.stream_port > 0 else None
+    if stream is not None:
+        stream.start()
     print(
         f"Camera preview started with the {args.detector} detector. "
         "Voice verification is hands-free; keys are backup only."
@@ -464,6 +487,7 @@ def _run(args: argparse.Namespace) -> None:
         if client is not None
         else "Offline mode: set RAFEEQ device credentials to synchronize verified alerts."
     )
+    detection_enabled_at = time.monotonic() + max(0, args.warmup_seconds)
 
     try:
         while True:
@@ -476,6 +500,7 @@ def _run(args: argparse.Namespace) -> None:
             monotonic_now = time.monotonic()
             if (
                 detection.is_possible_fall
+                and monotonic_now >= detection_enabled_at
                 and emergencies.active_fall_event_id is None
                 and monotonic_now >= cooldown_until
             ):
@@ -511,12 +536,27 @@ def _run(args: argparse.Namespace) -> None:
                 outbox.publish_pending()
 
             active_deadline = float(voice_verification.get("deadline") or verification_deadline)
+            stream_frame = frame.copy()
+            _draw_preview(
+                cv2,
+                stream_frame,
+                detector,
+                emergencies,
+                active_deadline,
+                outcome_message,
+                bool(voice_verification.get("listening")),
+            )
+            stream_frame = _auto_color_bgr(stream_frame, cv2, np)
+            if stream is not None:
+                stream.publish(cv2, stream_frame)
             if args.headless:
                 if monotonic_now >= next_status_at:
                     metrics = getattr(detector, "last_metrics", None)
                     status = (
                         "fall_verification_active"
                         if emergencies.active_fall_event_id is not None
+                        else "warming_up"
+                        if monotonic_now < detection_enabled_at
                         else "monitoring"
                     )
                     print(f"Camera status: {status}; metrics={metrics}")
@@ -566,6 +606,8 @@ def _run(args: argparse.Namespace) -> None:
                 outbox.publish_pending()
                 next_publish_at = monotonic_now + 5
     finally:
+        if stream is not None:
+            stream.close()
         detector.close()
         capture.release()
         if not args.headless:
@@ -664,6 +706,121 @@ def _open_camera(cv2: Any, index: int) -> Any:
         print(f"Picamera2 fallback failed: {exc}")
     print("No physical camera frames available; using synthetic camera stream.")
     return SyntheticCameraCapture()
+
+
+class _FrameStreamServer:
+    def __init__(self, host: str, port: int) -> None:
+        self.host = host
+        self.port = port
+        self._lock = threading.Lock()
+        self._frame: bytes | None = None
+        self._server: ThreadingHTTPServer | None = None
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self._server = ThreadingHTTPServer((self.host, self.port), _make_stream_handler(self))
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+        print(f"RAFEEQ fall camera stream: http://{self.host}:{self.port}")
+
+    def publish(self, cv2: Any, frame: Any) -> None:
+        ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        if not ok:
+            return
+        with self._lock:
+            self._frame = encoded.tobytes()
+
+    def latest_frame(self) -> bytes | None:
+        with self._lock:
+            return self._frame
+
+    def close(self) -> None:
+        if self._server is not None:
+            self._server.shutdown()
+            self._server.server_close()
+
+
+def _make_stream_handler(stream: _FrameStreamServer) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path in {"/", "/index.html"}:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(
+                    b"""<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAFEEQ Fall Detection Camera</title>
+  <style>
+    body { margin: 0; background: #111; color: white; font-family: sans-serif; }
+    header { padding: 12px 16px; background: #202020; }
+    img { display: block; width: 100vw; height: calc(100vh - 48px); object-fit: contain; }
+  </style>
+</head>
+<body>
+  <header>RAFEEQ Fall Detection Camera</header>
+  <img src="/stream.mjpg">
+</body>
+</html>"""
+                )
+                return
+            if self.path == "/snapshot.jpg":
+                frame = stream.latest_frame()
+                if frame is None:
+                    self.send_error(503, "No frame yet")
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(frame)))
+                self.end_headers()
+                self.wfile.write(frame)
+                return
+            if self.path == "/stream.mjpg":
+                self.send_response(200)
+                self.send_header("Age", "0")
+                self.send_header("Cache-Control", "no-cache, private")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                self.end_headers()
+                while True:
+                    frame = stream.latest_frame()
+                    if frame is None:
+                        time.sleep(0.1)
+                        continue
+                    try:
+                        self.wfile.write(b"--frame\r\n")
+                        self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                        self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode())
+                        self.wfile.write(frame)
+                        self.wfile.write(b"\r\n")
+                        time.sleep(0.05)
+                    except (BrokenPipeError, ConnectionResetError):
+                        break
+                return
+            self.send_error(404)
+
+        def log_message(self, fmt: str, *args: object) -> None:
+            print(f"{self.address_string()} - {fmt % args}", flush=True)
+
+    return Handler
+
+
+def _auto_color_bgr(frame: Any, cv2: Any, np: Any) -> Any:
+    working = frame.astype(np.float32)
+    mask = np.all((working > 8) & (working < 248), axis=2)
+    pixels = working[mask]
+    if pixels.size:
+        means = pixels.mean(axis=0)
+        target = float(means.mean())
+        scales = np.divide(target, means, out=np.ones_like(means), where=means > 1)
+        working *= np.clip(scales, 0.75, 1.35)
+    balanced = np.clip(working, 0, 255).astype(np.uint8)
+    hsv = cv2.cvtColor(balanced, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.08, 0, 255)
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.03, 0, 255)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
 
 def _mark_camera_ready() -> None:
