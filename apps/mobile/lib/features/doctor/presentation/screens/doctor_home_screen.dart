@@ -1076,12 +1076,22 @@ class _PatientInfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cleanSubtitle = subtitle?.trim() ?? '';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tileColor =
+        isDark ? const Color(0xFF241D3E) : RafeeqColors.lavenderSoft;
+    final borderColor =
+        isDark ? RafeeqColors.outlineDark : RafeeqColors.outline;
+    final primaryTextColor =
+        isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final secondaryTextColor =
+        isDark ? RafeeqColors.mutedDark : RafeeqColors.muted;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: RafeeqColors.lavenderSoft,
+        color: tileColor,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1092,7 +1102,10 @@ class _PatientInfoTile extends StatelessWidget {
             value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: primaryTextColor,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           if (cleanSubtitle.isNotEmpty) ...[
             const SizedBox(height: 3),
@@ -1100,7 +1113,10 @@ class _PatientInfoTile extends StatelessWidget {
               cleanSubtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: secondaryTextColor),
             ),
           ],
         ],
@@ -1124,12 +1140,21 @@ class _DoctorContactTile extends StatelessWidget {
       if (phone.isNotEmpty) phone,
       if (email.isNotEmpty) email,
     ].join(' • ');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tileColor =
+        isDark ? const Color(0xFF241D3E) : RafeeqColors.lavenderSoft;
+    final borderColor =
+        isDark ? RafeeqColors.outlineDark : RafeeqColors.outline;
+    final primaryTextColor =
+        isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final secondaryTextColor =
+        isDark ? RafeeqColors.mutedDark : RafeeqColors.muted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: RafeeqColors.lavenderSoft,
+        color: tileColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: RafeeqColors.outline),
+        border: Border.all(color: borderColor),
       ),
       child: Row(children: [
         const CircleAvatar(
@@ -1144,12 +1169,18 @@ class _DoctorContactTile extends StatelessWidget {
             children: [
               SelectableText(
                 recipient['name']?.toString() ?? '',
-                style: const TextStyle(fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: primaryTextColor,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               if (details.isNotEmpty)
                 SelectableText(
                   details,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: secondaryTextColor),
                 ),
             ],
           ),
@@ -1243,21 +1274,22 @@ class _RiskChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final (label, color, background) = switch (risk) {
       _PatientRisk.stable => (
           strings.stable,
           RafeeqColors.success,
-          const Color(0xFFE1F7EC),
+          isDark ? const Color(0xFF153729) : const Color(0xFFE1F7EC),
         ),
       _PatientRisk.followUp => (
           strings.needsFollowUp,
-          const Color(0xFFB66D00),
-          const Color(0xFFFFF0CF),
+          isDark ? const Color(0xFFFFCB73) : const Color(0xFFB66D00),
+          isDark ? const Color(0xFF3A2812) : const Color(0xFFFFF0CF),
         ),
       _PatientRisk.critical => (
           strings.criticalCondition,
           RafeeqColors.danger,
-          const Color(0xFFFFE4E9),
+          isDark ? const Color(0xFF3B1724) : const Color(0xFFFFE4E9),
         ),
     };
     return Container(
@@ -1345,16 +1377,26 @@ class _DoctorEmergencyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final active =
         event['status'] != 'resolved' && event['status'] != 'false_alarm';
+    final titleColor = active
+        ? RafeeqColors.danger
+        : (isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink);
     return RafeeqGlowCard(
       padding: EdgeInsets.zero,
       glowColor: active ? RafeeqColors.danger : RafeeqColors.primary,
       gradient: active
-          ? const LinearGradient(
+          ? LinearGradient(
               begin: AlignmentDirectional.topStart,
               end: AlignmentDirectional.bottomEnd,
-              colors: [Color(0xFFFFE8ED), Colors.white],
+              colors: isDark
+                  ? const [
+                      Color(0xFF32172B),
+                      Color(0xFF211633),
+                      Color(0xFF181126),
+                    ]
+                  : const [Color(0xFFFFE8ED), Colors.white],
             )
           : RafeeqGradients.aliveCardFor(Theme.of(context).brightness),
       child: ListTile(
@@ -1391,7 +1433,7 @@ class _DoctorEmergencyCard extends StatelessWidget {
               ? strings.sosHelpRequest
               : strings.fallDetected,
           style: TextStyle(
-            color: active ? RafeeqColors.danger : RafeeqColors.ink,
+            color: titleColor,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -1509,32 +1551,40 @@ class _PatientSummaryMetric extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          color: RafeeqColors.lavenderSoft,
-          borderRadius: BorderRadius.circular(17),
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF241D3E) : RafeeqColors.lavenderSoft,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(
+          color: isDark ? RafeeqColors.outlineDark : Colors.transparent,
         ),
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                color: RafeeqColors.primary,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: RafeeqColors.primary,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
             ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      );
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? RafeeqColors.mutedDark : RafeeqColors.muted,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DetailSectionCard extends StatelessWidget {
@@ -1588,20 +1638,40 @@ class _CompactDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor =
+        isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final secondaryTextColor =
+        isDark ? RafeeqColors.mutedDark : RafeeqColors.muted;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: RafeeqColors.lavenderSoft,
+        color: isDark ? const Color(0xFF241D3E) : RafeeqColors.lavenderSoft,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? RafeeqColors.outlineDark : Colors.transparent,
+        ),
       ),
       child: Row(children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                title,
+                style: TextStyle(
+                  color: primaryTextColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: secondaryTextColor),
+              ),
             ],
           ),
         ),
