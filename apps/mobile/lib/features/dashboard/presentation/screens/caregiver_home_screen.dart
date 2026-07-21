@@ -2321,12 +2321,24 @@ class _EmergencyRecipientsSlideState extends State<_EmergencyRecipientsSlide> {
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final count = widget.recipients.length;
+    final panelColor = isDark
+        ? const Color(0xFF19142D).withValues(alpha: 0.96)
+        : Colors.white.withValues(alpha: 0.76);
+    final rowColor = isDark ? const Color(0xFF241D3E) : Colors.white;
+    final badgeColor = isDark ? const Color(0xFF35265F) : RafeeqColors.lavender;
+    final primaryTextColor =
+        isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final secondaryTextColor =
+        isDark ? RafeeqColors.mutedDark : RafeeqColors.muted;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.76),
+        color: panelColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: RafeeqColors.outline),
+        border: Border.all(
+          color: isDark ? RafeeqColors.outlineDark : RafeeqColors.outline,
+        ),
       ),
       child: Column(children: [
         InkWell(
@@ -2345,14 +2357,17 @@ class _EmergencyRecipientsSlideState extends State<_EmergencyRecipientsSlide> {
               Expanded(
                 child: Text(
                   isArabic ? 'الأشخاص الذين وصلهم التنبيه' : 'People notified',
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: primaryTextColor,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: RafeeqColors.lavender,
+                  color: badgeColor,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -2399,8 +2414,13 @@ class _EmergencyRecipientsSlideState extends State<_EmergencyRecipientsSlide> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: rowColor,
                                 borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isDark
+                                      ? RafeeqColors.outlineDark
+                                      : Colors.transparent,
+                                ),
                               ),
                               child: Row(children: [
                                 const Icon(
@@ -2418,8 +2438,10 @@ class _EmergencyRecipientsSlideState extends State<_EmergencyRecipientsSlide> {
                                         name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w800),
+                                        style: TextStyle(
+                                          color: primaryTextColor,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                       if (details.isNotEmpty)
                                         Text(
@@ -2428,7 +2450,9 @@ class _EmergencyRecipientsSlideState extends State<_EmergencyRecipientsSlide> {
                                           overflow: TextOverflow.ellipsis,
                                           style: Theme.of(context)
                                               .textTheme
-                                              .bodySmall,
+                                              .bodySmall
+                                              ?.copyWith(
+                                                  color: secondaryTextColor),
                                         ),
                                     ],
                                   ),
@@ -2684,6 +2708,13 @@ class _EmergencyTabState extends State<EmergencyTab> {
     final status = emergency['status'].toString();
     final type = emergency['type'].toString();
     final active = status != 'resolved' && status != 'false_alarm';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final summaryColor = active
+        ? (isDark
+            ? const Color(0xFF3A1830).withValues(alpha: 0.72)
+            : Colors.white.withValues(alpha: 0.64))
+        : (isDark ? const Color(0xFF241D3E) : RafeeqColors.lavenderSoft);
     final recipientNames = recipients
         .map((item) => item['name']?.toString() ?? '')
         .where((name) => name.trim().isNotEmpty)
@@ -2694,10 +2725,16 @@ class _EmergencyTabState extends State<EmergencyTab> {
       child: RafeeqGlowCard(
         glowColor: active ? RafeeqColors.danger : RafeeqColors.primary,
         gradient: active
-            ? const LinearGradient(
+            ? LinearGradient(
                 begin: AlignmentDirectional.topStart,
                 end: AlignmentDirectional.bottomEnd,
-                colors: [Color(0xFFFFE8ED), Colors.white],
+                colors: isDark
+                    ? const [
+                        Color(0xFF32172B),
+                        Color(0xFF211633),
+                        Color(0xFF181126),
+                      ]
+                    : const [Color(0xFFFFE8ED), Colors.white],
               )
             : RafeeqGradients.aliveCardFor(Theme.of(context).brightness),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2720,11 +2757,11 @@ class _EmergencyTabState extends State<EmergencyTab> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: active
-                  ? Colors.white.withValues(alpha: 0.64)
-                  : RafeeqColors.lavenderSoft,
+              color: summaryColor,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: RafeeqColors.outline),
+              border: Border.all(
+                color: isDark ? RafeeqColors.outlineDark : RafeeqColors.outline,
+              ),
             ),
             child: Row(children: [
               const Icon(
@@ -2744,7 +2781,10 @@ class _EmergencyTabState extends State<EmergencyTab> {
                           : 'Notified: $recipientNames'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ]),
