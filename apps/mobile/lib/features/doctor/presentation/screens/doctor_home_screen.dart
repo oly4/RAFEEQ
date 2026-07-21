@@ -1301,13 +1301,10 @@ class _DoctorMetricCard extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: RafeeqGradients.softCard,
-            borderRadius: BorderRadius.all(Radius.circular(26)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+  Widget build(BuildContext context) => RafeeqGlowCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: SizedBox(
+          height: double.infinity,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1432,36 +1429,35 @@ class _ReportChartCard extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(17),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleLarge),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
+  Widget build(BuildContext context) => RafeeqGlowCard(
+        glowColor: color,
+        padding: const EdgeInsets.all(17),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 145,
-                width: double.infinity,
-                child: CustomPaint(
-                  painter: _TrendPainter(values: values, color: color),
                 ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 145,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _TrendPainter(values: values, color: color),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
 }
@@ -1563,25 +1559,23 @@ class _DetailSectionCard extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(icon, color: RafeeqColors.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(title,
-                      style: Theme.of(context).textTheme.titleLarge),
-                ),
-                if (action != null) action!,
-              ]),
-              const SizedBox(height: 10),
-              if (children.isEmpty) Text(emptyText) else ...children,
-            ],
-          ),
+  Widget build(BuildContext context) => RafeeqGlowCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(icon, color: RafeeqColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child:
+                    Text(title, style: Theme.of(context).textTheme.titleLarge),
+              ),
+              if (action != null) action!,
+            ]),
+            const SizedBox(height: 10),
+            if (children.isEmpty) Text(emptyText) else ...children,
+          ],
         ),
       );
 }

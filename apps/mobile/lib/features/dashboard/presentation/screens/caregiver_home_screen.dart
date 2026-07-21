@@ -919,9 +919,11 @@ class _DashboardActionCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => RafeeqGlowCard(
+        onTap: onTap,
+        padding: EdgeInsets.zero,
+        glowColor: iconColor,
         child: ListTile(
-          onTap: onTap,
           contentPadding: const EdgeInsetsDirectional.fromSTEB(14, 9, 10, 9),
           leading: CircleAvatar(
             radius: 23,
@@ -983,68 +985,63 @@ class _MedicationSummaryCard extends StatelessWidget {
             ? 'تم أخذ ${_arabicDoseCount(completed)} من ${_arabicDoseCount(total)}'
             : '$completed of $total taken today';
 
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor: statusColor.withValues(alpha: 0.12),
-                  child: Icon(
-                    complete
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.medication_outlined,
-                    color: statusColor,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        strings.todayMedication,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        headline,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: statusColor,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
-                  color: RafeeqColors.muted,
-                ),
-              ]),
-              const SizedBox(height: 12),
-              Text(detail, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 9),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 8,
-                  backgroundColor: RafeeqColors.lavender,
-                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                ),
+    return RafeeqGlowCard(
+      onTap: onTap,
+      glowColor: statusColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            CircleAvatar(
+              radius: 25,
+              backgroundColor: statusColor.withValues(alpha: 0.12),
+              child: Icon(
+                complete
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.medication_outlined,
+                color: statusColor,
               ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    strings.todayMedication,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    headline,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Directionality.of(context) == TextDirection.rtl
+                  ? Icons.chevron_left_rounded
+                  : Icons.chevron_right_rounded,
+              color: RafeeqColors.muted,
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Text(detail, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 9),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: RafeeqColors.lavender,
+              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1115,145 +1112,143 @@ class _PatientSummaryCardState extends State<_PatientSummaryCard> {
         .where((item) => item.value != null && item.value!.trim().isNotEmpty)
         .toList();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 13, 12, 13),
-        child: Column(children: [
-          Row(children: [
-            CircleAvatar(
-              radius: 27,
-              backgroundColor: RafeeqColors.lavender,
-              child: Text(
-                widget.patientName.characters.first,
-                style: const TextStyle(
-                  color: RafeeqColors.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.patientName,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: widget.deviceStatus == 'online'
-                            ? RafeeqColors.success
-                            : RafeeqColors.muted,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        localizedStatus(strings, widget.deviceStatus),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 3),
-                  Text(
-                    summary,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: expanded
-                  ? (isArabic ? 'إخفاء المعلومات' : 'Hide info')
-                  : (isArabic ? 'عرض المعلومات' : 'Show info'),
-              onPressed: () => setState(() => expanded = !expanded),
-              icon: Icon(
-                expanded
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.keyboard_arrow_down_rounded,
+    return RafeeqGlowCard(
+      hero: true,
+      padding: const EdgeInsets.fromLTRB(16, 13, 12, 13),
+      child: Column(children: [
+        Row(children: [
+          CircleAvatar(
+            radius: 27,
+            backgroundColor: RafeeqColors.lavender,
+            child: Text(
+              widget.patientName.characters.first,
+              style: const TextStyle(
                 color: RafeeqColors.primary,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
             ),
-          ]),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            child: expanded
-                ? Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: RafeeqColors.lavenderSoft,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: RafeeqColors.outline),
-                      ),
-                      child: visibleItems.isEmpty
-                          ? Row(children: [
-                              Expanded(
-                                child: Text(
-                                  isArabic
-                                      ? 'أضف الأشياء التي يحبها ومعلومات الحالة هنا.'
-                                      : 'Add preferences and care information here.',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: widget.onEdit,
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                label: Text(isArabic ? 'إضافة' : 'Add'),
-                              ),
-                            ])
-                          : Column(children: [
-                              ...visibleItems.map((item) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Icon(item.icon,
-                                            color: RafeeqColors.primary,
-                                            size: 18),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text.rich(TextSpan(children: [
-                                            TextSpan(
-                                              text: '${item.label}: ',
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w900),
-                                            ),
-                                            TextSpan(text: item.value),
-                                          ])),
-                                        ),
-                                      ],
-                                    ),
-                                  )),
-                              Align(
-                                alignment: AlignmentDirectional.centerEnd,
-                                child: TextButton.icon(
-                                  onPressed: widget.onEdit,
-                                  icon:
-                                      const Icon(Icons.edit_outlined, size: 18),
-                                  label: Text(isArabic ? 'تعديل' : 'Edit'),
-                                ),
-                              ),
-                            ]),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.patientName,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Row(children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: widget.deviceStatus == 'online'
+                          ? RafeeqColors.success
+                          : RafeeqColors.muted,
+                      shape: BoxShape.circle,
                     ),
-                  )
-                : const SizedBox.shrink(),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      localizedStatus(strings, widget.deviceStatus),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 3),
+                Text(
+                  summary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: expanded
+                ? (isArabic ? 'إخفاء المعلومات' : 'Hide info')
+                : (isArabic ? 'عرض المعلومات' : 'Show info'),
+            onPressed: () => setState(() => expanded = !expanded),
+            icon: Icon(
+              expanded
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              color: RafeeqColors.primary,
+            ),
           ),
         ]),
-      ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          child: expanded
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: RafeeqColors.lavenderSoft,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: RafeeqColors.outline),
+                    ),
+                    child: visibleItems.isEmpty
+                        ? Row(children: [
+                            Expanded(
+                              child: Text(
+                                isArabic
+                                    ? 'أضف الأشياء التي يحبها ومعلومات الحالة هنا.'
+                                    : 'Add preferences and care information here.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: widget.onEdit,
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: Text(isArabic ? 'إضافة' : 'Add'),
+                            ),
+                          ])
+                        : Column(children: [
+                            ...visibleItems.map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(item.icon,
+                                          color: RafeeqColors.primary,
+                                          size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text.rich(TextSpan(children: [
+                                          TextSpan(
+                                            text: '${item.label}: ',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w900),
+                                          ),
+                                          TextSpan(text: item.value),
+                                        ])),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                            Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: TextButton.icon(
+                                onPressed: widget.onEdit,
+                                icon: const Icon(Icons.edit_outlined, size: 18),
+                                label: Text(isArabic ? 'تعديل' : 'Edit'),
+                              ),
+                            ),
+                          ]),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ]),
     );
   }
 
@@ -1301,194 +1296,185 @@ class _CareProfileCardState extends State<_CareProfileCard> {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     final recipients = (widget.profile['alert_recipients'] as List? ?? const [])
         .cast<dynamic>();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const CircleAvatar(
-              radius: 22,
-              backgroundColor: RafeeqColors.lavender,
-              child: Icon(Icons.family_restroom_rounded,
-                  color: RafeeqColors.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isArabic
-                          ? 'ولي الأمر والمسؤولون'
-                          : 'Guardians and contacts',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isArabic
-                          ? 'أشخاص يقدر الدكتور يتواصل معهم ويصلهم التنبيه عند الخطر'
-                          : 'People doctors can contact and notify during danger',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ]),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: RafeeqColors.lavenderSoft,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: RafeeqColors.outline),
-            ),
-            child: Column(children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => setState(() => expanded = !expanded),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(children: [
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      color: RafeeqColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        isArabic ? 'قائمة المسؤولين' : 'Contact list',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${recipients.length}',
-                        style: const TextStyle(
-                          color: RafeeqColors.primary,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    IconButton.filledTonal(
-                      onPressed: widget.onAddContact,
-                      tooltip: isArabic ? 'إضافة' : 'Add',
-                      icon:
-                          const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                    ),
-                  ]),
-                ),
+    return RafeeqGlowCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const CircleAvatar(
+            radius: 22,
+            backgroundColor: RafeeqColors.lavender,
+            child: Icon(Icons.family_restroom_rounded,
+                color: RafeeqColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                isArabic ? 'ولي الأمر والمسؤولون' : 'Guardians and contacts',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                child: expanded
-                    ? Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                        child: recipients.isEmpty
-                            ? Align(
-                                alignment: AlignmentDirectional.centerStart,
-                                child: Text(
-                                  isArabic
-                                      ? 'أضف ولي أمر أو شخص مسؤول عن المريض هنا.'
-                                      : 'Add a guardian or responsible contact here.',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              )
-                            : Column(
-                                children: recipients.take(8).map((item) {
-                                  final recipient =
-                                      Map<String, dynamic>.from(item as Map);
-                                  final removable = recipient['source'] ==
-                                      'emergency_contact';
-                                  final relationship =
-                                      recipient['relationship']?.toString() ??
-                                          '';
-                                  final phone =
-                                      recipient['phone']?.toString() ?? '';
-                                  final email =
-                                      recipient['email']?.toString() ?? '';
-                                  final details = [
-                                    if (relationship.isNotEmpty) relationship,
-                                    if (phone.isNotEmpty) phone,
-                                    if (email.isNotEmpty) email,
-                                  ].join(' • ');
-                                  return Container(
-                                    margin: const EdgeInsets.only(top: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(15),
-                                    ),
-                                    child: Row(children: [
-                                      const Icon(Icons.person_outline_rounded,
-                                          color: RafeeqColors.primary,
-                                          size: 19),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              recipient['name']?.toString() ??
-                                                  '',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w800),
-                                            ),
-                                            if (details.isNotEmpty) ...[
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                details,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall,
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                      if (removable)
-                                        IconButton(
-                                          tooltip: isArabic ? 'حذف' : 'Delete',
-                                          visualDensity: VisualDensity.compact,
-                                          onPressed: () =>
-                                              widget.onDeleteContact(recipient),
-                                          icon: const Icon(
-                                              Icons.delete_outline_rounded,
-                                              color: RafeeqColors.danger,
-                                              size: 20),
-                                        )
-                                      else
-                                        Icon(
-                                          Icons.lock_outline_rounded,
-                                          color: RafeeqColors.muted
-                                              .withValues(alpha: 0.65),
-                                          size: 18,
-                                        ),
-                                    ]),
-                                  );
-                                }).toList(),
-                              ),
-                      )
-                    : const SizedBox.shrink(),
+              const SizedBox(height: 2),
+              Text(
+                isArabic
+                    ? 'أشخاص يقدر الدكتور يتواصل معهم ويصلهم التنبيه عند الخطر'
+                    : 'People doctors can contact and notify during danger',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ]),
           ),
         ]),
-      ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: RafeeqColors.lavenderSoft,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: RafeeqColors.outline),
+          ),
+          child: Column(children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => setState(() => expanded = !expanded),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(children: [
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: RafeeqColors.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      isArabic ? 'قائمة المسؤولين' : 'Contact list',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${recipients.length}',
+                      style: const TextStyle(
+                        color: RafeeqColors.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    onPressed: widget.onAddContact,
+                    tooltip: isArabic ? 'إضافة' : 'Add',
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                  ),
+                ]),
+              ),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              child: expanded
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: recipients.isEmpty
+                          ? Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Text(
+                                isArabic
+                                    ? 'أضف ولي أمر أو شخص مسؤول عن المريض هنا.'
+                                    : 'Add a guardian or responsible contact here.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            )
+                          : Column(
+                              children: recipients.take(8).map((item) {
+                                final recipient =
+                                    Map<String, dynamic>.from(item as Map);
+                                final removable =
+                                    recipient['source'] == 'emergency_contact';
+                                final relationship =
+                                    recipient['relationship']?.toString() ?? '';
+                                final phone =
+                                    recipient['phone']?.toString() ?? '';
+                                final email =
+                                    recipient['email']?.toString() ?? '';
+                                final details = [
+                                  if (relationship.isNotEmpty) relationship,
+                                  if (phone.isNotEmpty) phone,
+                                  if (email.isNotEmpty) email,
+                                ].join(' • ');
+                                return Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: Row(children: [
+                                    const Icon(Icons.person_outline_rounded,
+                                        color: RafeeqColors.primary, size: 19),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            recipient['name']?.toString() ?? '',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w800),
+                                          ),
+                                          if (details.isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              details,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    if (removable)
+                                      IconButton(
+                                        tooltip: isArabic ? 'حذف' : 'Delete',
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () =>
+                                            widget.onDeleteContact(recipient),
+                                        icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: RafeeqColors.danger,
+                                            size: 20),
+                                      )
+                                    else
+                                      Icon(
+                                        Icons.lock_outline_rounded,
+                                        color: RafeeqColors.muted
+                                            .withValues(alpha: 0.65),
+                                        size: 18,
+                                      ),
+                                  ]),
+                                );
+                              }).toList(),
+                            ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -1507,51 +1493,49 @@ class _DashboardTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
-            child: Row(children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  gradient: RafeeqGradients.softCard,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: RafeeqColors.primary.withValues(alpha: 0.14),
-                      blurRadius: 14,
-                      offset: const Offset(0, 7),
-                    ),
-                  ],
-                ),
-                child: Icon(icon, color: RafeeqColors.primary, size: 21),
+  Widget build(BuildContext context) => RafeeqGlowCard(
+        onTap: onTap,
+        padding: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+          child: Row(children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: RafeeqGradients.softCard,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: RafeeqColors.primary.withValues(alpha: 0.14),
+                    blurRadius: 14,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+              child: Icon(icon, color: RafeeqColors.primary, size: 21),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
-            ]),
-          ),
+            ),
+          ]),
         ),
       );
 }
@@ -3033,16 +3017,19 @@ class _ReportCard extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext context) => Card(
-        margin: const EdgeInsets.only(bottom: 10),
-        child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: RafeeqColors.lavender,
-              child: Icon(icon, color: RafeeqColors.primary),
-            ),
-            title: Text(label),
-            trailing:
-                Text(value, style: Theme.of(context).textTheme.titleLarge)),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: RafeeqGlowCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: RafeeqColors.lavender,
+                child: Icon(icon, color: RafeeqColors.primary),
+              ),
+              title: Text(label),
+              trailing:
+                  Text(value, style: Theme.of(context).textTheme.titleLarge)),
+        ),
       );
 }
 

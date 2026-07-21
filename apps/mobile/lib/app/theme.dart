@@ -44,6 +44,17 @@ abstract final class RafeeqGradients {
       RafeeqColors.lavenderSoft,
     ],
   );
+
+  static const aliveCard = LinearGradient(
+    begin: AlignmentDirectional.topStart,
+    end: AlignmentDirectional.bottomEnd,
+    colors: [
+      Colors.white,
+      Color(0xFFFBF8FF),
+      Color(0xFFF0E8FF),
+    ],
+    stops: [0, 0.56, 1],
+  );
 }
 
 const _rafeeqFontFamily = 'Roboto';
@@ -354,5 +365,139 @@ class RafeeqAppViewport extends StatelessWidget {
             ),
           );
         },
+      );
+}
+
+class RafeeqGlowCard extends StatelessWidget {
+  const RafeeqGlowCard({
+    required this.child,
+    this.onTap,
+    this.padding = const EdgeInsets.all(16),
+    this.radius = 28,
+    this.gradient = RafeeqGradients.aliveCard,
+    this.glowColor = RafeeqColors.primary,
+    this.borderColor = RafeeqColors.outline,
+    this.hero = false,
+    super.key,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final Gradient gradient;
+  final Color glowColor;
+  final Color borderColor;
+  final bool hero;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(radius);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: hero ? 0.28 : 0.16),
+            blurRadius: hero ? 32 : 22,
+            spreadRadius: hero ? -4 : -8,
+            offset: Offset(0, hero ? 16 : 10),
+          ),
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.75),
+            blurRadius: 16,
+            offset: const Offset(-5, -5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: borderRadius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: borderRadius,
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: borderRadius,
+              border: Border.all(
+                color: borderColor.withValues(alpha: 0.92),
+                width: 1.2,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: borderRadius,
+              child: Stack(
+                children: [
+                  PositionedDirectional(
+                    end: -42,
+                    bottom: -48,
+                    child: _GlowOrb(
+                      color: glowColor,
+                      size: hero ? 150 : 108,
+                      opacity: hero ? 0.24 : 0.15,
+                    ),
+                  ),
+                  PositionedDirectional(
+                    start: -32,
+                    top: -36,
+                    child: _GlowOrb(
+                      color: RafeeqColors.lavender,
+                      size: hero ? 120 : 92,
+                      opacity: 0.55,
+                    ),
+                  ),
+                  PositionedDirectional(
+                    start: 18,
+                    end: 18,
+                    top: 0,
+                    child: Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0),
+                            Colors.white.withValues(alpha: 0.86),
+                            Colors.white.withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(padding: padding, child: child),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlowOrb extends StatelessWidget {
+  const _GlowOrb({
+    required this.color,
+    required this.size,
+    required this.opacity,
+  });
+
+  final Color color;
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: opacity),
+              color.withValues(alpha: 0),
+            ],
+          ),
+        ),
       );
 }

@@ -634,62 +634,57 @@ class _PoemExerciseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    return Card(
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: AlignmentDirectional.topStart,
-            end: AlignmentDirectional.bottomEnd,
-            colors: [RafeeqColors.lavender, Colors.white],
+    return RafeeqGlowCard(
+      hero: true,
+      gradient: const LinearGradient(
+        begin: AlignmentDirectional.topStart,
+        end: AlignmentDirectional.bottomEnd,
+        colors: [RafeeqColors.lavender, Colors.white],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: RafeeqGradients.primary,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: RafeeqColors.primary.withValues(alpha: 0.24),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.auto_stories_outlined,
+              color: Colors.white,
+            ),
           ),
-          borderRadius: BorderRadius.all(Radius.circular(26)),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: RafeeqGradients.primary,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: RafeeqColors.primary.withValues(alpha: 0.24),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.auto_stories_outlined,
-                color: Colors.white,
-              ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isArabic ? 'تمرين إكمال القصيدة' : 'Complete the poem',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isArabic
+                      ? 'رفيق يقرأ البداية بصوت OpenAI، والمريض يكملها من الذاكرة.'
+                      : 'Rafeeq reads the beginning with OpenAI voice, and the patient completes it from memory.',
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isArabic ? 'تمرين إكمال القصيدة' : 'Complete the poem',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isArabic
-                        ? 'رفيق يقرأ البداية بصوت OpenAI، والمريض يكملها من الذاكرة.'
-                        : 'Rafeeq reads the beginning with OpenAI voice, and the patient completes it from memory.',
-                  ),
-                ],
-              ),
-            ),
-            FilledButton.tonal(
-              onPressed: onPressed,
-              child: Text(isArabic ? 'ابدأ' : 'Start'),
-            ),
-          ],
-        ),
+          ),
+          FilledButton.tonal(
+            onPressed: onPressed,
+            child: Text(isArabic ? 'ابدأ' : 'Start'),
+          ),
+        ],
       ),
     );
   }
