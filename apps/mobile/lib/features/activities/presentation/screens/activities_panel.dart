@@ -645,12 +645,21 @@ class _PoemExerciseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final subtitleColor = isDark ? RafeeqColors.mutedDark : RafeeqColors.muted;
     return RafeeqGlowCard(
       hero: true,
-      gradient: const LinearGradient(
+      gradient: LinearGradient(
         begin: AlignmentDirectional.topStart,
         end: AlignmentDirectional.bottomEnd,
-        colors: [RafeeqColors.lavender, Colors.white],
+        colors: isDark
+            ? const [
+                Color(0xFF2B224A),
+                Color(0xFF1D1733),
+                Color(0xFF171229),
+              ]
+            : const [RafeeqColors.lavender, Colors.white],
       ),
       child: Row(
         children: [
@@ -680,13 +689,17 @@ class _PoemExerciseCard extends StatelessWidget {
               children: [
                 Text(
                   isArabic ? 'تمرين إكمال القصيدة' : 'Complete the poem',
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   isArabic
                       ? 'رفيق يقرأ البداية بصوت OpenAI، والمريض يكملها من الذاكرة.'
                       : 'Rafeeq reads the beginning with OpenAI voice, and the patient completes it from memory.',
+                  style: TextStyle(color: subtitleColor),
                 ),
               ],
             ),
@@ -708,11 +721,12 @@ class _SoftInfoBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4EEFF),
+        color: isDark ? const Color(0xFF2A2148) : const Color(0xFFF4EEFF),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(text, textAlign: TextAlign.center),
