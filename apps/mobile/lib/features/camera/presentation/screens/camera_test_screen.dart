@@ -2,7 +2,9 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../widgets/camera_stream_view.dart';
 
 class CameraTestScreen extends StatefulWidget {
   const CameraTestScreen({super.key});
@@ -13,6 +15,9 @@ class CameraTestScreen extends StatefulWidget {
 
 class _CameraTestScreenState extends State<CameraTestScreen>
     with WidgetsBindingObserver {
+  static const _piCameraStreamUrl =
+      String.fromEnvironment('RAFEEQ_CAMERA_STREAM_URL');
+
   CameraController? _controller;
   List<CameraDescription> _cameras = const [];
   bool _loading = false;
@@ -27,6 +32,8 @@ class _CameraTestScreenState extends State<CameraTestScreen>
   }
 
   bool get _ready => _controller?.value.isInitialized ?? false;
+
+  bool get _hasPiCameraStream => _piCameraStreamUrl.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -53,9 +60,12 @@ class _CameraTestScreenState extends State<CameraTestScreen>
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     return Scaffold(
       appBar: AppBar(
-        title: Text(strings.cameraTest),
+        title: Text(_hasPiCameraStream
+            ? (isArabic ? 'كاميرا الرازبيري' : 'Raspberry Pi camera')
+            : strings.cameraTest),
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.close),
@@ -64,22 +74,74 @@ class _CameraTestScreenState extends State<CameraTestScreen>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.privacy_tip_outlined),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(strings.cameraPrivacyNotice)),
-                ],
-              ),
+          RafeeqGlowCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.privacy_tip_outlined),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(_hasPiCameraStream
+                      ? (isArabic
+                          ? 'بث مباشر من كاميرا الرازبيري. لا يتم حفظ الفيديو داخل التطبيق.'
+                          : 'Live stream from the Raspberry Pi camera. The app does not save this video.')
+                      : strings.cameraPrivacyNotice),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
-          if (_ready) _cameraPreview(strings) else _cameraStartCard(strings),
+          if (_hasPiCameraStream)
+            _raspberryPiPreview(strings)
+          else if (_ready)
+            _cameraPreview(strings)
+          else
+            _cameraStartCard(strings),
+        ],
+      ),
+    );
+  }
+
+  Widget _raspberryPiPreview(AppLocalizations strings) {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    return RafeeqGlowCard(
+      hero: true,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const CircleAvatar(
+              backgroundColor: RafeeqColors.lavender,
+              child: Icon(Icons.videocam_outlined, color: RafeeqColors.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isArabic ? 'بث غرفة المريض' : 'Patient room stream',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const Chip(label: Text('LIVE')),
+          ]),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: ColoredBox(
+              color: Colors.black,
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: CameraStreamView(streamUrl: _piCameraStreamUrl),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isArabic
+                ? 'إذا لم يظهر البث، تأكد أن خدمة الكاميرا على الرازبيري والـ tunnel يعملان.'
+                : 'If the stream does not appear, make sure the Raspberry Pi camera service and tunnel are running.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
