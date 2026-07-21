@@ -53,6 +53,11 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
     final session = ref.watch(appSessionProvider);
+    ref.listen<AppSession>(appSessionProvider, (previous, next) {
+      if (previous?.user?.id != next.user?.id && next.user?.role != 'doctor') {
+        setState(() => index = 0);
+      }
+    });
     final pages = [
       DashboardTab(
           key: ValueKey(dashboardRefreshTick),

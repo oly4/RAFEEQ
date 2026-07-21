@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../networking/api_client.dart';
+import 'browser_session_storage.dart';
 import 'models.dart';
 
 enum SessionStatus { loading, unauthenticated, authenticated }
@@ -17,6 +18,7 @@ class AppSession extends ChangeNotifier {
 
   final ApiClient api;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final BrowserSessionStorage _browserStorage = BrowserSessionStorage();
   SessionStatus status = SessionStatus.loading;
   Locale locale = const Locale('ar');
   ThemeMode themeMode = ThemeMode.system;
@@ -207,19 +209,34 @@ class AppSession extends ChangeNotifier {
 
   Future<String?> _safeRead(String key) async {
     try {
-      return await _storage.read(key: key);
+      final value = await _storage.read(key: key);
+      if (value != null) return value;
+    } catch (_) {
+      // On plain HTTP web deployments, secure storage can be unavailable.
+    }
+    try {
+      return _browserStorage.read(key);
     } catch (_) {
       return null;
     }
   }
 
   Future<void> _safeWrite(String key, String value) async {
+    var wroteSecurely = false;
     try {
       await _storage.write(key: key, value: value);
+      wroteSecurely = true;
     } catch (error) {
       if (kDebugMode) {
         debugPrint(
             'Secure storage unavailable for this browser session: $error');
+      }
+    }
+    try {
+      _browserStorage.write(key, value);
+    } catch (error) {
+      if (kDebugMode && !wroteSecurely) {
+        debugPrint('Browser session storage unavailable: $error');
       }
     }
   }
@@ -231,6 +248,10 @@ class AppSession extends ChangeNotifier {
     try {
       await _storage.delete(key: 'access_token');
       await _storage.delete(key: 'refresh_token');
+    } catch (_) {}
+    try {
+      _browserStorage.delete('access_token');
+      _browserStorage.delete('refresh_token');
     } catch (_) {}
   }
 }
