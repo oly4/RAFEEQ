@@ -64,43 +64,46 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
           const SizedBox(width: 10),
         ],
       ),
-      body: FutureBuilder<List<DoctorPatientData>>(
-        future: future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _DoctorErrorState(
-              message: session.api.errorMessage(snapshot.error!),
-              retry: refresh,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: RafeeqGradients.page),
+        child: FutureBuilder<List<DoctorPatientData>>(
+          future: future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return _DoctorErrorState(
+                message: session.api.errorMessage(snapshot.error!),
+                retry: refresh,
+              );
+            }
+            final patients = snapshot.data!;
+            if (patients.isEmpty) return _EmptyDoctorState(strings: strings);
+            return IndexedStack(
+              index: index,
+              children: [
+                _DoctorDashboardView(
+                  patients: patients,
+                  query: query,
+                  onQueryChanged: (value) => setState(() => query = value),
+                  onOpenPatient: _openPatient,
+                  onRefresh: refresh,
+                ),
+                _DoctorReportsView(
+                  key: ValueKey(reportPatientId),
+                  patients: patients,
+                  repository: repository,
+                  initialPatientId: reportPatientId,
+                ),
+                _DoctorEmergenciesView(
+                  patients: patients,
+                  onRefresh: refresh,
+                ),
+              ],
             );
-          }
-          final patients = snapshot.data!;
-          if (patients.isEmpty) return _EmptyDoctorState(strings: strings);
-          return IndexedStack(
-            index: index,
-            children: [
-              _DoctorDashboardView(
-                patients: patients,
-                query: query,
-                onQueryChanged: (value) => setState(() => query = value),
-                onOpenPatient: _openPatient,
-                onRefresh: refresh,
-              ),
-              _DoctorReportsView(
-                key: ValueKey(reportPatientId),
-                patients: patients,
-                repository: repository,
-                initialPatientId: reportPatientId,
-              ),
-              _DoctorEmergenciesView(
-                patients: patients,
-                onRefresh: refresh,
-              ),
-            ],
-          );
-        },
+          },
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
@@ -1299,7 +1302,11 @@ class _DoctorMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        child: Padding(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: RafeeqGradients.softCard,
+            borderRadius: BorderRadius.all(Radius.circular(26)),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1307,7 +1314,22 @@ class _DoctorMetricCard extends StatelessWidget {
             children: [
               Align(
                 alignment: AlignmentDirectional.centerEnd,
-                child: Icon(icon, color: RafeeqColors.primary, size: 23),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: RafeeqColors.lavender,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: RafeeqColors.primary.withValues(alpha: 0.13),
+                        blurRadius: 12,
+                        offset: const Offset(0, 7),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: RafeeqColors.primary, size: 22),
+                ),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme.dart';
 import '../../../../core/auth/app_session.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../l10n/localized_values.dart';
@@ -634,14 +635,36 @@ class _PoemExerciseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     return Card(
-      color: const Color(0xFFF7F0FF),
-      child: Padding(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
+            colors: [RafeeqColors.lavender, Colors.white],
+          ),
+          borderRadius: BorderRadius.all(Radius.circular(26)),
+        ),
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFFE7D8FF),
-              child: Icon(Icons.auto_stories_outlined),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: RafeeqGradients.primary,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: RafeeqColors.primary.withValues(alpha: 0.24),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.auto_stories_outlined,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(

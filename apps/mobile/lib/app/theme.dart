@@ -15,6 +15,37 @@ abstract final class RafeeqColors {
   static const outline = Color(0xFFE6DDF5);
 }
 
+abstract final class RafeeqGradients {
+  static const page = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color(0xFFF0E8FF),
+      RafeeqColors.lavenderSoft,
+      Colors.white,
+    ],
+    stops: [0, 0.42, 1],
+  );
+
+  static const primary = LinearGradient(
+    begin: AlignmentDirectional.topStart,
+    end: AlignmentDirectional.bottomEnd,
+    colors: [
+      RafeeqColors.primary,
+      RafeeqColors.primaryDark,
+    ],
+  );
+
+  static const softCard = LinearGradient(
+    begin: AlignmentDirectional.topStart,
+    end: AlignmentDirectional.bottomEnd,
+    colors: [
+      Colors.white,
+      RafeeqColors.lavenderSoft,
+    ],
+  );
+}
+
 const _rafeeqFontFamily = 'Roboto';
 const _rafeeqFontFallback = ['RafeeqNaskh'];
 
@@ -48,7 +79,7 @@ ThemeData buildRafeeqTheme() {
     useMaterial3: true,
     fontFamily: _rafeeqFontFamily,
     colorScheme: scheme,
-    scaffoldBackgroundColor: RafeeqColors.lavenderSoft,
+    scaffoldBackgroundColor: const Color(0xFFFCFAFF),
     textTheme: baseText.copyWith(
       headlineSmall: baseText.headlineSmall?.copyWith(
         fontWeight: FontWeight.w800,
@@ -63,7 +94,7 @@ ThemeData buildRafeeqTheme() {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
-      backgroundColor: RafeeqColors.lavenderSoft,
+      backgroundColor: Color(0xFFFCFAFF),
       foregroundColor: RafeeqColors.ink,
       surfaceTintColor: Colors.transparent,
       titleTextStyle: TextStyle(
@@ -78,17 +109,21 @@ ThemeData buildRafeeqTheme() {
       margin: EdgeInsets.zero,
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
-      elevation: 1.5,
-      shadowColor: RafeeqColors.ink.withValues(alpha: 0.12),
+      elevation: 5,
+      shadowColor: RafeeqColors.primary.withValues(alpha: 0.16),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: RafeeqColors.outline),
+        borderRadius: BorderRadius.circular(26),
+        side: BorderSide(color: RafeeqColors.outline.withValues(alpha: 0.82)),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(48, 54),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 5,
+        shadowColor: RafeeqColors.primary.withValues(alpha: 0.28),
+        backgroundColor: RafeeqColors.primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         textStyle: const TextStyle(
           fontFamily: _rafeeqFontFamily,
           fontFamilyFallback: _rafeeqFontFallback,
@@ -101,7 +136,9 @@ ThemeData buildRafeeqTheme() {
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(48, 54),
         side: const BorderSide(color: RafeeqColors.outline, width: 1.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        backgroundColor: Colors.white,
+        foregroundColor: RafeeqColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         textStyle: const TextStyle(
           fontFamily: _rafeeqFontFamily,
           fontFamilyFallback: _rafeeqFontFallback,
@@ -123,13 +160,34 @@ ThemeData buildRafeeqTheme() {
         borderSide: const BorderSide(color: RafeeqColors.outline),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         borderSide: const BorderSide(color: RafeeqColors.primary, width: 2),
       ),
     ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: RafeeqColors.ink,
+        highlightColor: RafeeqColors.lavender,
+        shadowColor: RafeeqColors.primary.withValues(alpha: 0.14),
+        elevation: 2,
+      ),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      elevation: 10,
+      highlightElevation: 4,
+      backgroundColor: RafeeqColors.lavender,
+      foregroundColor: RafeeqColors.primary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: RafeeqColors.primary,
+      linearTrackColor: RafeeqColors.lavender,
+      circularTrackColor: RafeeqColors.lavender,
+    ),
     navigationBarTheme: NavigationBarThemeData(
       height: 72,
-      elevation: 6,
+      elevation: 12,
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       indicatorColor: RafeeqColors.lavender,
@@ -149,6 +207,43 @@ ThemeData buildRafeeqTheme() {
                 ? RafeeqColors.primary
                 : RafeeqColors.muted,
           )),
+    ),
+    listTileTheme: ListTileThemeData(
+      iconColor: RafeeqColors.primary,
+      textColor: RafeeqColors.ink,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? RafeeqColors.primary
+              : Colors.white,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.white
+              : RafeeqColors.ink,
+        ),
+        side: WidgetStateProperty.all(
+          BorderSide(color: RafeeqColors.outline.withValues(alpha: 0.95)),
+        ),
+        shape: WidgetStateProperty.all(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: RafeeqColors.ink,
+      contentTextStyle: const TextStyle(
+        color: Colors.white,
+        fontFamily: _rafeeqFontFamily,
+        fontFamilyFallback: _rafeeqFontFallback,
+        fontWeight: FontWeight.w700,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     ),
     dividerTheme: const DividerThemeData(color: RafeeqColors.outline),
     dialogTheme: DialogThemeData(
@@ -196,8 +291,18 @@ class RafeeqAppViewport extends StatelessWidget {
               constraints.maxHeight - footerHeight - 12;
           final resolvedPhoneHeight =
               math.min(phoneHeight, math.max(520.0, availablePhoneHeight));
-          return ColoredBox(
-            color: const Color(0xFFF4F0FC),
+          return DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF0E8FF),
+                  Color(0xFFF9F6FF),
+                  Colors.white,
+                ],
+              ),
+            ),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -219,8 +324,10 @@ class RafeeqAppViewport extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(32),
-                      child: ColoredBox(
-                        color: RafeeqColors.lavenderSoft,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          gradient: RafeeqGradients.page,
+                        ),
                         child: child,
                       ),
                     ),

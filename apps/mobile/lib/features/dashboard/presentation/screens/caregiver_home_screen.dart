@@ -113,7 +113,10 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
               ]
             : null,
       ),
-      body: IndexedStack(index: index, children: pages),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: RafeeqGradients.page),
+        child: IndexedStack(index: index, children: pages),
+      ),
       floatingActionButton: index != 4
           ? FloatingActionButton.extended(
               onPressed: () => _runGlobalVoiceCommand(session),
@@ -410,13 +413,18 @@ class _DashboardTabState extends State<DashboardTab> {
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
                 decoration: BoxDecoration(
-                  color: RafeeqColors.primary,
+                  gradient: RafeeqGradients.primary,
                   borderRadius: BorderRadius.circular(23),
                   boxShadow: [
                     BoxShadow(
-                      color: RafeeqColors.primary.withValues(alpha: 0.25),
-                      blurRadius: 18,
-                      offset: const Offset(0, 9),
+                      color: RafeeqColors.primary.withValues(alpha: 0.34),
+                      blurRadius: 26,
+                      offset: const Offset(0, 14),
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      blurRadius: 12,
+                      offset: const Offset(-4, -5),
                     ),
                   ],
                 ),
@@ -1506,9 +1514,20 @@ class _DashboardTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
             child: Row(children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: RafeeqColors.lavender,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: RafeeqGradients.softCard,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: RafeeqColors.primary.withValues(alpha: 0.14),
+                      blurRadius: 14,
+                      offset: const Offset(0, 7),
+                    ),
+                  ],
+                ),
                 child: Icon(icon, color: RafeeqColors.primary, size: 21),
               ),
               const SizedBox(width: 8),
@@ -1550,7 +1569,7 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.white.withValues(alpha: 0.16),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
@@ -1558,7 +1577,18 @@ class _QuickAction extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
             child: Column(children: [
-              Icon(icon, color: Colors.white, size: 22),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
               const SizedBox(height: 5),
               Text(
                 label,
