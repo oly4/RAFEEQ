@@ -1288,6 +1288,15 @@ class _CareProfileCardState extends State<_CareProfileCard> {
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panelColor =
+        isDark ? const Color(0xFF19142D) : RafeeqColors.lavenderSoft;
+    final rowColor =
+        isDark ? const Color(0xFF241D3E).withValues(alpha: 0.96) : Colors.white;
+    final primaryTextColor =
+        isDark ? const Color(0xFFF7F2FF) : RafeeqColors.ink;
+    final secondaryTextColor =
+        isDark ? RafeeqColors.mutedDark : RafeeqColors.muted;
     final recipients = (widget.profile['alert_recipients'] as List? ?? const [])
         .cast<dynamic>();
     return RafeeqGlowCard(
@@ -1321,9 +1330,11 @@ class _CareProfileCardState extends State<_CareProfileCard> {
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
-            color: RafeeqColors.lavenderSoft,
+            color: panelColor,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: RafeeqColors.outline),
+            border: Border.all(
+              color: isDark ? RafeeqColors.outlineDark : RafeeqColors.outline,
+            ),
           ),
           child: Column(children: [
             InkWell(
@@ -1350,12 +1361,12 @@ class _CareProfileCardState extends State<_CareProfileCard> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: rowColor,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       '${recipients.length}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: RafeeqColors.primary,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1408,8 +1419,13 @@ class _CareProfileCardState extends State<_CareProfileCard> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: rowColor,
                                     borderRadius: BorderRadius.circular(15),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? RafeeqColors.outlineDark
+                                          : Colors.transparent,
+                                    ),
                                   ),
                                   child: Row(children: [
                                     const Icon(Icons.person_outline_rounded,
@@ -1424,8 +1440,10 @@ class _CareProfileCardState extends State<_CareProfileCard> {
                                             recipient['name']?.toString() ?? '',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w800),
+                                            style: TextStyle(
+                                              color: primaryTextColor,
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                           ),
                                           if (details.isNotEmpty) ...[
                                             const SizedBox(height: 2),
@@ -1435,7 +1453,10 @@ class _CareProfileCardState extends State<_CareProfileCard> {
                                               overflow: TextOverflow.ellipsis,
                                               style: Theme.of(context)
                                                   .textTheme
-                                                  .bodySmall,
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                      color:
+                                                          secondaryTextColor),
                                             ),
                                           ],
                                         ],
@@ -1455,8 +1476,8 @@ class _CareProfileCardState extends State<_CareProfileCard> {
                                     else
                                       Icon(
                                         Icons.lock_outline_rounded,
-                                        color: RafeeqColors.muted
-                                            .withValues(alpha: 0.65),
+                                        color: secondaryTextColor.withValues(
+                                            alpha: 0.78),
                                         size: 18,
                                       ),
                                   ]),
