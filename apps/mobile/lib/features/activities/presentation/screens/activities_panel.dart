@@ -136,7 +136,7 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
   Future<void> _add() async {
     final strings = AppLocalizations.of(context)!;
     final title = TextEditingController();
-    var type = 'memory_exercise';
+    var type = 'recognize_photos';
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -152,9 +152,6 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
               decoration: InputDecoration(labelText: strings.activityType),
               items: [
                 DropdownMenuItem(
-                    value: 'memory_exercise',
-                    child: Text(strings.activityMemoryExercise)),
-                DropdownMenuItem(
                     value: 'recognize_photos',
                     child: Text(strings.activityRecognizePhotos)),
                 DropdownMenuItem(
@@ -162,9 +159,6 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
                 DropdownMenuItem(
                     value: 'conversation',
                     child: Text(strings.activityConversation)),
-                DropdownMenuItem(
-                    value: 'calm_music',
-                    child: Text(strings.activityCalmMusic)),
               ],
               onChanged: (value) => setDialogState(() => type = value ?? type),
             ),
