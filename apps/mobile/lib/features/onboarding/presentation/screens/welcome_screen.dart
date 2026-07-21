@@ -102,6 +102,23 @@ class WelcomeScreen extends ConsumerWidget {
                           ),
                           icon: const Icon(Icons.language_rounded, size: 17),
                         ),
+                        IconButton(
+                          tooltip: session.locale.languageCode == 'ar'
+                              ? 'تغيير المظهر'
+                              : 'Change appearance',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => session.changeThemeMode(
+                            brightness == Brightness.dark
+                                ? ThemeMode.light
+                                : ThemeMode.dark,
+                          ),
+                          icon: Icon(
+                            brightness == Brightness.dark
+                                ? Icons.light_mode_rounded
+                                : Icons.dark_mode_rounded,
+                            size: 17,
+                          ),
+                        ),
                       ],
                     ),
                     Text(

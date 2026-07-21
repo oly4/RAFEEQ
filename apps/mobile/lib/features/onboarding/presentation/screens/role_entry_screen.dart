@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/auth/providers.dart';
 import '../../../../core/widgets/rafeeq_robot.dart';
 import '../../../../l10n/app_localizations.dart';
 
-class RoleEntryScreen extends StatelessWidget {
+class RoleEntryScreen extends ConsumerWidget {
   const RoleEntryScreen({required this.role, super.key});
 
   final String role;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final strings = AppLocalizations.of(context)!;
+    final session = ref.watch(appSessionProvider);
     final isDoctor = role == 'doctor';
     final roleLabel = isDoctor ? strings.doctorAccess : strings.familyAccess;
     final brightness = Theme.of(context).brightness;
@@ -29,9 +32,8 @@ class RoleEntryScreen extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
                   child: Column(children: [
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: TextButton.icon(
+                    Row(children: [
+                      TextButton.icon(
                         onPressed: () => context.go('/welcome'),
                         icon: Icon(
                           Directionality.of(context) == TextDirection.rtl
@@ -41,7 +43,23 @@ class RoleEntryScreen extends StatelessWidget {
                         ),
                         label: Text(strings.back),
                       ),
-                    ),
+                      const Spacer(),
+                      IconButton.filledTonal(
+                        tooltip: session.locale.languageCode == 'ar'
+                            ? 'تغيير المظهر'
+                            : 'Change appearance',
+                        onPressed: () => session.changeThemeMode(
+                          brightness == Brightness.dark
+                              ? ThemeMode.light
+                              : ThemeMode.dark,
+                        ),
+                        icon: Icon(
+                          brightness == Brightness.dark
+                              ? Icons.light_mode_rounded
+                              : Icons.dark_mode_rounded,
+                        ),
+                      ),
+                    ]),
                     const Spacer(),
                     RafeeqRobot(
                       semanticLabel: strings.robotSemanticLabel,

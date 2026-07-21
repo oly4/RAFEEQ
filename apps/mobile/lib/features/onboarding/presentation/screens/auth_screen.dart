@@ -56,6 +56,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         title: Text(strings.appName),
+        actions: [
+          IconButton(
+            tooltip: session.locale.languageCode == 'ar'
+                ? 'تغيير المظهر'
+                : 'Change appearance',
+            onPressed: () => session.changeThemeMode(
+              Theme.of(context).brightness == Brightness.dark
+                  ? ThemeMode.light
+                  : ThemeMode.dark,
+            ),
+            icon: Icon(
+              Theme.of(context).brightness == Brightness.dark
+                  ? Icons.light_mode_rounded
+                  : Icons.dark_mode_rounded,
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,
