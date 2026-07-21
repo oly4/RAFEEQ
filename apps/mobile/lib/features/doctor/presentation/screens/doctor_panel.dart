@@ -53,70 +53,66 @@ class _DoctorPanelState extends State<DoctorPanel> {
           final notes = snapshot.data!['notes']!;
           return ListView(padding: const EdgeInsets.all(16), children: [
             if (doctors.isEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(children: [
-                    const CircleAvatar(
-                      radius: 40,
-                      backgroundColor: RafeeqColors.lavender,
-                      child: Icon(Icons.medical_services_outlined,
-                          size: 38, color: RafeeqColors.primary),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(strings.noDoctorAssigned, textAlign: TextAlign.center),
-                  ]),
-                ),
+              RafeeqGlowCard(
+                child: Column(children: [
+                  const CircleAvatar(
+                    radius: 40,
+                    backgroundColor: RafeeqColors.lavender,
+                    child: Icon(Icons.medical_services_outlined,
+                        size: 38, color: RafeeqColors.primary),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(strings.noDoctorAssigned, textAlign: TextAlign.center),
+                ]),
               )
             else
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(children: [
-                    CircleAvatar(
-                      radius: 42,
-                      backgroundColor: RafeeqColors.lavender,
-                      child: Text(
-                        doctors.first['full_name']
-                            .toString()
-                            .characters
-                            .first
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          color: RafeeqColors.primary,
-                          fontSize: 29,
-                          fontWeight: FontWeight.w900,
-                        ),
+              RafeeqGlowCard(
+                hero: true,
+                padding: const EdgeInsets.all(18),
+                child: Column(children: [
+                  CircleAvatar(
+                    radius: 42,
+                    backgroundColor: RafeeqColors.lavender,
+                    child: Text(
+                      doctors.first['full_name']
+                          .toString()
+                          .characters
+                          .first
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        color: RafeeqColors.primary,
+                        fontSize: 29,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(doctors.first['full_name'].toString(),
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 4),
-                    Text(doctors.first['email'].toString(),
-                        style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 13),
-                    Row(children: [
-                      Expanded(
-                        child: FilledButton.tonalIcon(
-                          onPressed: () =>
-                              _showContact(doctors.first['email'].toString()),
-                          icon: const Icon(Icons.call_outlined),
-                          label: Text(strings.call),
-                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(doctors.first['full_name'].toString(),
+                      style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(doctors.first['email'].toString(),
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 13),
+                  Row(children: [
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () =>
+                            _showContact(doctors.first['email'].toString()),
+                        icon: const Icon(Icons.call_outlined),
+                        label: Text(strings.call),
                       ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              _showContact(doctors.first['email'].toString()),
-                          icon: const Icon(Icons.mail_outline_rounded),
-                          label: Text(strings.message),
-                        ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _showContact(doctors.first['email'].toString()),
+                        icon: const Icon(Icons.mail_outline_rounded),
+                        label: Text(strings.message),
                       ),
-                    ]),
+                    ),
                   ]),
-                ),
+                ]),
               ),
             const SizedBox(height: 12),
             if (doctors.isEmpty)
@@ -139,12 +135,16 @@ class _DoctorPanelState extends State<DoctorPanel> {
             if (notes.isEmpty)
               Text(strings.noSharedNotes)
             else
-              ...notes.map((note) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.note_outlined),
-                      title: Text(note['text'].toString()),
-                      subtitle:
-                          Text(localizedDateTime(context, note['created_at'])),
+              ...notes.map((note) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: RafeeqGlowCard(
+                      padding: EdgeInsets.zero,
+                      child: ListTile(
+                        leading: const Icon(Icons.note_outlined),
+                        title: Text(note['text'].toString()),
+                        subtitle: Text(
+                            localizedDateTime(context, note['created_at'])),
+                      ),
                     ),
                   )),
           ]);

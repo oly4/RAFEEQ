@@ -102,9 +102,18 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
               final activity = snapshot.data![activityIndex];
               final duration =
                   (activity['duration_minutes'] as num?)?.toInt() ?? 0;
-              return Card(
+              return RafeeqGlowCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
-                  leading: const Icon(Icons.psychology_alt_outlined),
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      gradient: RafeeqGradients.softCard,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.psychology_alt_outlined),
+                  ),
                   title: Text(activity['title'].toString()),
                   subtitle: Text(
                       '${localizedActivityType(strings, activity['type'])} '

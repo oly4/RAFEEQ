@@ -259,11 +259,8 @@ class _DoctorDashboardView extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (visible.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(strings.noData, textAlign: TextAlign.center),
-              ),
+            RafeeqGlowCard(
+              child: Text(strings.noData, textAlign: TextAlign.center),
             )
           else
             ...visible.map(
@@ -368,7 +365,8 @@ class _DoctorReportsViewState extends State<_DoctorReportsView> {
             }
             final report = snapshot.data!;
             return Column(children: [
-              Card(
+              RafeeqGlowCard(
+                padding: EdgeInsets.zero,
                 child: ListTile(
                   leading: const Icon(Icons.chevron_left_rounded),
                   title: Text(
@@ -394,11 +392,8 @@ class _DoctorReportsViewState extends State<_DoctorReportsView> {
                 color: RafeeqColors.danger,
               ),
               const SizedBox(height: 14),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(strings.clinicalDisclaimer),
-                ),
+              RafeeqGlowCard(
+                child: Text(strings.clinicalDisclaimer),
               ),
             ]);
           },
@@ -435,15 +430,12 @@ class _DoctorEmergenciesView extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           if (items.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(children: [
-                  const Icon(Icons.health_and_safety_outlined, size: 54),
-                  const SizedBox(height: 12),
-                  Text(strings.noEmergencyHistory),
-                ]),
-              ),
+            RafeeqGlowCard(
+              child: Column(children: [
+                const Icon(Icons.health_and_safety_outlined, size: 54),
+                const SizedBox(height: 12),
+                Text(strings.noEmergencyHistory),
+              ]),
             )
           else
             ...items.map(
@@ -609,89 +601,88 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> {
               label: Text(strings.backToPatients),
             ),
           ),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(17),
-              child: Column(children: [
-                Row(children: [
-                  CircleAvatar(
-                    radius: 35,
-                    backgroundColor: RafeeqColors.lavender,
-                    child: Text(
-                      data.summary.displayName.characters.first,
-                      style: const TextStyle(
-                        color: RafeeqColors.primary,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
+          RafeeqGlowCard(
+            hero: true,
+            padding: const EdgeInsets.all(17),
+            child: Column(children: [
+              Row(children: [
+                CircleAvatar(
+                  radius: 35,
+                  backgroundColor: RafeeqColors.lavender,
+                  child: Text(
+                    data.summary.displayName.characters.first,
+                    style: const TextStyle(
+                      color: RafeeqColors.primary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Flexible(
+                          child: Text(data.summary.displayName,
+                              style: Theme.of(context).textTheme.titleLarge),
+                        ),
+                        const SizedBox(width: 7),
+                        _RiskChip(risk: risk),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_ageText(context, data.patient)} • ${data.patient['timezone']}',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                    ),
+                      Text(
+                        '${strings.lastUpdated}: ${localizedDateTime(context, data.patient['updated_at'])}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Flexible(
-                            child: Text(data.summary.displayName,
-                                style: Theme.of(context).textTheme.titleLarge),
-                          ),
-                          const SizedBox(width: 7),
-                          _RiskChip(risk: risk),
-                        ]),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_ageText(context, data.patient)} • ${data.patient['timezone']}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        Text(
-                          '${strings.lastUpdated}: ${localizedDateTime(context, data.patient['updated_at'])}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: _PatientInfoTile(
-                      label: _doctorCopy(context, 'ولي الأمر', 'Guardian'),
-                      value: guardian == null
-                          ? _doctorCopy(
-                              context,
-                              'لم يتم تحديد مسؤول',
-                              'No guardian set',
-                            )
-                          : '${guardian['name']}'
-                              '${guardian['relationship']?.toString().isNotEmpty == true ? ' (${guardian['relationship']})' : ''}',
-                      subtitle: guardian == null
-                          ? _doctorCopy(
-                              context,
-                              'تضيفه العائلة من الداشبورد',
-                              'Family can add one from dashboard',
-                            )
-                          : [
-                              guardian['phone']?.toString() ?? '',
-                              guardian['email']?.toString() ?? '',
-                            ].where((item) => item.isNotEmpty).join(' • '),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _PatientInfoTile(
-                      label: strings.diagnosis,
-                      value: data.patient['condition_notes']
-                                  ?.toString()
-                                  .isNotEmpty ==
-                              true
-                          ? data.patient['condition_notes'].toString()
-                          : strings.noConditionNotes,
-                    ),
-                  ),
-                ]),
+                ),
               ]),
-            ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(
+                  child: _PatientInfoTile(
+                    label: _doctorCopy(context, 'ولي الأمر', 'Guardian'),
+                    value: guardian == null
+                        ? _doctorCopy(
+                            context,
+                            'لم يتم تحديد مسؤول',
+                            'No guardian set',
+                          )
+                        : '${guardian['name']}'
+                            '${guardian['relationship']?.toString().isNotEmpty == true ? ' (${guardian['relationship']})' : ''}',
+                    subtitle: guardian == null
+                        ? _doctorCopy(
+                            context,
+                            'تضيفه العائلة من الداشبورد',
+                            'Family can add one from dashboard',
+                          )
+                        : [
+                            guardian['phone']?.toString() ?? '',
+                            guardian['email']?.toString() ?? '',
+                          ].where((item) => item.isNotEmpty).join(' • '),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _PatientInfoTile(
+                    label: strings.diagnosis,
+                    value: data.patient['condition_notes']
+                                ?.toString()
+                                .isNotEmpty ==
+                            true
+                        ? data.patient['condition_notes'].toString()
+                        : strings.noConditionNotes,
+                  ),
+                ),
+              ]),
+            ]),
           ),
           const SizedBox(height: 12),
           Row(children: [
@@ -717,43 +708,40 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> {
             ),
           ]),
           const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(strings.patientSummary,
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1.9,
-                    children: [
-                      _PatientSummaryMetric(
-                        value: '${data.report['routine_completion_rate']}%',
-                        label: strings.engagementLevel,
-                      ),
-                      _PatientSummaryMetric(
-                        value: '${data.report['medication_adherence_rate']}%',
-                        label: strings.medicationAdherence,
-                      ),
-                      _PatientSummaryMetric(
-                        value: '${data.report['memory_activities_completed']}',
-                        label: strings.memoryExercises,
-                      ),
-                      _PatientSummaryMetric(
-                        value: '${data.emergencies.length}',
-                        label: strings.fallCases,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          RafeeqGlowCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(strings.patientSummary,
+                    style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 1.9,
+                  children: [
+                    _PatientSummaryMetric(
+                      value: '${data.report['routine_completion_rate']}%',
+                      label: strings.engagementLevel,
+                    ),
+                    _PatientSummaryMetric(
+                      value: '${data.report['medication_adherence_rate']}%',
+                      label: strings.medicationAdherence,
+                    ),
+                    _PatientSummaryMetric(
+                      value: '${data.report['memory_activities_completed']}',
+                      label: strings.memoryExercises,
+                    ),
+                    _PatientSummaryMetric(
+                      value: '${data.emergencies.length}',
+                      label: strings.fallCases,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 14),
@@ -805,53 +793,48 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> {
                 .toList(),
           ),
           const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.note_alt_outlined,
-                        color: RafeeqColors.primary),
-                    const SizedBox(width: 8),
-                    Text(strings.doctorNotes,
-                        style: Theme.of(context).textTheme.titleLarge),
-                  ]),
-                  const SizedBox(height: 10),
-                  if (data.notes.isEmpty)
-                    Text(strings.noNotes)
-                  else
-                    ...data.notes.map(
-                      (note) => _CompactDetailRow(
-                        title: note['text'].toString(),
-                        subtitle:
-                            localizedDateTime(context, note['created_at']),
-                      ),
+          RafeeqGlowCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.note_alt_outlined,
+                      color: RafeeqColors.primary),
+                  const SizedBox(width: 8),
+                  Text(strings.doctorNotes,
+                      style: Theme.of(context).textTheme.titleLarge),
+                ]),
+                const SizedBox(height: 10),
+                if (data.notes.isEmpty)
+                  Text(strings.noNotes)
+                else
+                  ...data.notes.map(
+                    (note) => _CompactDetailRow(
+                      title: note['text'].toString(),
+                      subtitle: localizedDateTime(context, note['created_at']),
                     ),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: noteController,
-                        decoration:
-                            InputDecoration(hintText: strings.addNewNote),
-                      ),
+                  ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: noteController,
+                      decoration: InputDecoration(hintText: strings.addNewNote),
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: saving ? null : () => _saveNote(data),
-                      child: saving
-                          ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text(strings.save),
-                    ),
-                  ]),
-                ],
-              ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: saving ? null : () => _saveNote(data),
+                    child: saving
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(strings.save),
+                  ),
+                ]),
+              ],
             ),
           ),
         ],
@@ -1212,9 +1195,10 @@ class _DoctorPatientCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
-    return Card(
+    return RafeeqGlowCard(
+      onTap: onTap,
+      padding: EdgeInsets.zero,
       child: ListTile(
-        onTap: onTap,
         contentPadding: const EdgeInsetsDirectional.fromSTEB(14, 10, 10, 10),
         leading: CircleAvatar(
           radius: 28,
@@ -1361,8 +1345,16 @@ class _DoctorEmergencyCard extends StatelessWidget {
     final strings = AppLocalizations.of(context)!;
     final active =
         event['status'] != 'resolved' && event['status'] != 'false_alarm';
-    return Card(
-      color: active ? const Color(0xFFFFE5E8) : Colors.white,
+    return RafeeqGlowCard(
+      padding: EdgeInsets.zero,
+      glowColor: active ? RafeeqColors.danger : RafeeqColors.primary,
+      gradient: active
+          ? const LinearGradient(
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
+              colors: [Color(0xFFFFE8ED), Colors.white],
+            )
+          : RafeeqGradients.aliveCard,
       child: ListTile(
         onTap: () => showDialog<void>(
           context: context,

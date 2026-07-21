@@ -117,11 +117,8 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
             ),
             const SizedBox(height: 8),
             if (categories.isEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(strings.noMemoriesPrompt),
-                ),
+              RafeeqGlowCard(
+                child: Text(strings.noMemoriesPrompt),
               )
             else
               _CategoryStrip(categories: categories, memories: memories),
@@ -148,25 +145,22 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
             ),
             const SizedBox(height: 12),
             if (photoMemories.isEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.photo_camera_back_outlined,
-                          size: 42, color: RafeeqColors.primary),
-                      const SizedBox(height: 10),
-                      Text(
-                        _copy(
-                          context,
-                          'ابدأ برفع صورة لشخص يعرفه المريض، واكتب الاسم والتلميح.',
-                          'Start by uploading a photo of someone the patient knows, then add the name and hint.',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
+              RafeeqGlowCard(
+                child: Column(
+                  children: [
+                    const Icon(Icons.photo_camera_back_outlined,
+                        size: 42, color: RafeeqColors.primary),
+                    const SizedBox(height: 10),
+                    Text(
+                      _copy(
+                        context,
+                        'ابدأ برفع صورة لشخص يعرفه المريض، واكتب الاسم والتلميح.',
+                        'Start by uploading a photo of someone the patient knows, then add the name and hint.',
                       ),
-                    ],
-                  ),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
                 ),
               )
             else
@@ -1037,14 +1031,15 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [
+    return RafeeqGlowCard(
+      hero: true,
+      gradient: const LinearGradient(
+        begin: AlignmentDirectional.topStart,
+        end: AlignmentDirectional.bottomEnd,
+        colors: [
           RafeeqColors.primary,
           Color(0xFFB27CFA),
-        ]),
-        borderRadius: BorderRadius.circular(24),
+        ],
       ),
       child: Row(
         children: [
@@ -1100,14 +1095,10 @@ class _CategoryStrip extends StatelessWidget {
               .where((memory) =>
                   memory['category_id'].toString() == category['id'].toString())
               .length;
-          return Container(
+          return RafeeqGlowCard(
             width: 150,
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F5FF),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFFE4D7FA)),
-            ),
+            radius: 22,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1152,8 +1143,9 @@ class _MemoryPhotoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     final prompt = memory['spoken_prompt']?.toString();
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return RafeeqGlowCard(
+      padding: EdgeInsets.zero,
+      hero: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

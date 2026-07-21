@@ -507,98 +507,86 @@ class _DashboardTabState extends State<DashboardTab> {
                 ]),
               ),
               const SizedBox(height: 12),
-              Card(
-                child: InkWell(
-                  onTap: widget.onOpenCamera,
-                  borderRadius: BorderRadius.circular(24),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 13,
-                    ),
-                    child: Row(children: [
-                      Stack(clipBehavior: Clip.none, children: [
-                        const CircleAvatar(
-                          radius: 26,
-                          backgroundColor: RafeeqColors.lavender,
-                          child: Icon(
-                            Icons.videocam_outlined,
-                            color: RafeeqColors.primary,
-                          ),
-                        ),
-                        PositionedDirectional(
-                          top: -7,
-                          end: -9,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: RafeeqColors.danger,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              strings.live,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.liveRoomTitle,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              strings.liveRoomSubtitle,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: RafeeqColors.muted,
-                      ),
-                    ]),
-                  ),
+              RafeeqGlowCard(
+                onTap: widget.onOpenCamera,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 13,
                 ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  child: Column(
+                child: Row(children: [
+                  Stack(clipBehavior: Clip.none, children: [
+                    const CircleAvatar(
+                      radius: 26,
+                      backgroundColor: RafeeqColors.lavender,
+                      child: Icon(
+                        Icons.videocam_outlined,
+                        color: RafeeqColors.primary,
+                      ),
+                    ),
+                    PositionedDirectional(
+                      top: -7,
+                      end: -9,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: RafeeqColors.danger,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          strings.live,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(strings.dailyProgress,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
-                              Text('${progress.round()}%'),
-                            ]),
-                        const SizedBox(height: 12),
-                        LinearProgressIndicator(
-                            value: progress / 100,
-                            minHeight: 10,
-                            borderRadius: BorderRadius.circular(8)),
-                      ]),
-                ),
+                        Text(
+                          strings.liveRoomTitle,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          strings.liveRoomSubtitle,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: RafeeqColors.muted,
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 12),
+              RafeeqGlowCard(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(strings.dailyProgress,
+                                style: Theme.of(context).textTheme.titleMedium),
+                            Text('${progress.round()}%'),
+                          ]),
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                          value: progress / 100,
+                          minHeight: 10,
+                          borderRadius: BorderRadius.circular(8)),
+                    ]),
               ),
               const SizedBox(height: 12),
               _MedicationSummaryCard(
@@ -1655,7 +1643,8 @@ class _RoutineTabState extends State<RoutineTab> {
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return Card(
+                return RafeeqGlowCard(
+                  padding: EdgeInsets.zero,
                   child: ListTile(
                     leading: const Icon(Icons.chevron_left_rounded),
                     title: Text(
@@ -1687,17 +1676,41 @@ class _RoutineTabState extends State<RoutineTab> {
               final item = items[index - 2];
               final occurrence = item['occurrence'] as Map<String, dynamic>?;
               final complete = occurrence?['status'] == 'completed';
-              return Card(
+              return RafeeqGlowCard(
+                padding: EdgeInsets.zero,
+                glowColor:
+                    complete ? RafeeqColors.success : RafeeqColors.primary,
                 child: ListTile(
                   contentPadding:
                       const EdgeInsetsDirectional.fromSTEB(12, 7, 10, 7),
-                  leading: CircleAvatar(
-                    backgroundColor: RafeeqColors.lavender,
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: complete
+                          ? const LinearGradient(
+                              colors: [Color(0xFFE1F7EC), Colors.white],
+                            )
+                          : RafeeqGradients.softCard,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (complete
+                                  ? RafeeqColors.success
+                                  : RafeeqColors.primary)
+                              .withValues(alpha: 0.16),
+                          blurRadius: 14,
+                          offset: const Offset(0, 7),
+                        ),
+                      ],
+                    ),
                     child: Icon(
                       item['type'] == 'medication'
                           ? Icons.medication_outlined
                           : Icons.event_note_outlined,
-                      color: RafeeqColors.primary,
+                      color: complete
+                          ? RafeeqColors.success
+                          : RafeeqColors.primary,
                     ),
                   ),
                   title: Text(item['title'].toString()),
@@ -2228,40 +2241,33 @@ class _RoutineChoiceTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-        margin: EdgeInsets.zero,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: RafeeqColors.lavender,
-                child: Icon(icon, color: RafeeqColors.primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 3),
-                    Text(subtitle,
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
-                color: RafeeqColors.muted,
-              ),
-            ]),
+  Widget build(BuildContext context) => RafeeqGlowCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: RafeeqColors.lavender,
+            child: Icon(icon, color: RafeeqColors.primary),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 3),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Icon(
+            Directionality.of(context) == TextDirection.rtl
+                ? Icons.chevron_left_rounded
+                : Icons.chevron_right_rounded,
+            color: RafeeqColors.muted,
+          ),
+        ]),
       );
 }
 
@@ -2576,24 +2582,22 @@ class _EmergencyTabState extends State<EmergencyTab> {
                 const SizedBox(height: 12),
               ],
               if (devices.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(children: [
-                      const Icon(Icons.smart_toy_outlined, size: 64),
-                      const SizedBox(height: 12),
-                      Text(strings.deviceNotPaired),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: _provisionSimulator,
-                        icon: const Icon(Icons.link),
-                        label: Text(strings.pairSimulator),
-                      ),
-                    ]),
-                  ),
+                RafeeqGlowCard(
+                  child: Column(children: [
+                    const Icon(Icons.smart_toy_outlined, size: 64),
+                    const SizedBox(height: 12),
+                    Text(strings.deviceNotPaired),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _provisionSimulator,
+                      icon: const Icon(Icons.link),
+                      label: Text(strings.pairSimulator),
+                    ),
+                  ]),
                 )
               else ...[
-                Card(
+                RafeeqGlowCard(
+                  padding: EdgeInsets.zero,
                   child: ListTile(
                     leading: const Icon(Icons.smart_toy, color: Colors.green),
                     title: Text(devices.first['display_name'].toString()),
@@ -2624,15 +2628,12 @@ class _EmergencyTabState extends State<EmergencyTab> {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 10),
               if (emergencies.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(children: [
-                      const Icon(Icons.health_and_safety_outlined, size: 56),
-                      const SizedBox(height: 12),
-                      Text(strings.noEmergencyHistory),
-                    ]),
-                  ),
+                RafeeqGlowCard(
+                  child: Column(children: [
+                    const Icon(Icons.health_and_safety_outlined, size: 56),
+                    const SizedBox(height: 12),
+                    Text(strings.noEmergencyHistory),
+                  ]),
                 )
               else
                 ...emergencies
@@ -2660,111 +2661,114 @@ class _EmergencyTabState extends State<EmergencyTab> {
         .join('، ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Card(
-        color: active ? Theme.of(context).colorScheme.errorContainer : null,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Icon(active ? Icons.warning_amber : Icons.check_circle_outline),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: Text(
-                      type == 'sos'
-                          ? strings.sosHelpRequest
-                          : strings.fallDetected,
-                      style: Theme.of(context).textTheme.titleMedium)),
-              Chip(label: Text(localizedStatus(strings, status))),
-            ]),
-            const SizedBox(height: 8),
-            Text('${strings.time}: '
-                '${localizedDateTime(context, emergency['detected_at'])}'),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: active
-                    ? Colors.white.withValues(alpha: 0.64)
-                    : RafeeqColors.lavenderSoft,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: RafeeqColors.outline),
-              ),
-              child: Row(children: [
-                const Icon(
-                  Icons.notifications_active_outlined,
-                  color: RafeeqColors.primary,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    recipientNames.isEmpty
-                        ? (isArabic
-                            ? 'لم تتم إضافة أشخاص لقائمة التنبيه بعد'
-                            : 'No alert recipients added yet')
-                        : (isArabic
-                            ? 'وصل التنبيه إلى: $recipientNames'
-                            : 'Notified: $recipientNames'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ]),
-            ),
-            if (emergency['resolution_note'] != null)
-              Text('${strings.result}: ${emergency['resolution_note']}'),
-            const SizedBox(height: 10),
-            _EmergencyRecipientsSlide(
-              recipients: recipients,
-              initiallyExpanded: true,
-            ),
-            const SizedBox(height: 12),
-            if (status == 'notified')
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => _acknowledge(emergency['id'].toString()),
-                  icon: const Icon(Icons.front_hand),
-                  label: Text(strings.acknowledgeAlert),
-                ),
-              ),
-            if (status == 'verifying') ...[
-              Text(strings.fallVerificationQuestion),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: () =>
-                        _verifyFall(emergency['id'].toString(), 'safe'),
-                    icon: const Icon(Icons.sentiment_satisfied_alt),
-                    label: Text(strings.patientIsOkay),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () =>
-                        _verifyFall(emergency['id'].toString(), 'timeout'),
-                    icon: const Icon(Icons.timer_off_outlined),
-                    label: Text(strings.simulateNoResponse),
-                  ),
-                ),
-              ]),
-            ],
-            if (status == 'acknowledged')
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _resolve(emergency['id'].toString()),
-                  icon: const Icon(Icons.task_alt),
-                  label: Text(strings.resolveEmergency),
-                ),
-              ),
+      child: RafeeqGlowCard(
+        glowColor: active ? RafeeqColors.danger : RafeeqColors.primary,
+        gradient: active
+            ? const LinearGradient(
+                begin: AlignmentDirectional.topStart,
+                end: AlignmentDirectional.bottomEnd,
+                colors: [Color(0xFFFFE8ED), Colors.white],
+              )
+            : RafeeqGradients.aliveCard,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(active ? Icons.warning_amber : Icons.check_circle_outline),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(
+                    type == 'sos'
+                        ? strings.sosHelpRequest
+                        : strings.fallDetected,
+                    style: Theme.of(context).textTheme.titleMedium)),
+            Chip(label: Text(localizedStatus(strings, status))),
           ]),
-        ),
+          const SizedBox(height: 8),
+          Text('${strings.time}: '
+              '${localizedDateTime(context, emergency['detected_at'])}'),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: active
+                  ? Colors.white.withValues(alpha: 0.64)
+                  : RafeeqColors.lavenderSoft,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: RafeeqColors.outline),
+            ),
+            child: Row(children: [
+              const Icon(
+                Icons.notifications_active_outlined,
+                color: RafeeqColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  recipientNames.isEmpty
+                      ? (isArabic
+                          ? 'لم تتم إضافة أشخاص لقائمة التنبيه بعد'
+                          : 'No alert recipients added yet')
+                      : (isArabic
+                          ? 'وصل التنبيه إلى: $recipientNames'
+                          : 'Notified: $recipientNames'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ]),
+          ),
+          if (emergency['resolution_note'] != null)
+            Text('${strings.result}: ${emergency['resolution_note']}'),
+          const SizedBox(height: 10),
+          _EmergencyRecipientsSlide(
+            recipients: recipients,
+            initiallyExpanded: true,
+          ),
+          const SizedBox(height: 12),
+          if (status == 'notified')
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _acknowledge(emergency['id'].toString()),
+                icon: const Icon(Icons.front_hand),
+                label: Text(strings.acknowledgeAlert),
+              ),
+            ),
+          if (status == 'verifying') ...[
+            Text(strings.fallVerificationQuestion),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: () =>
+                      _verifyFall(emergency['id'].toString(), 'safe'),
+                  icon: const Icon(Icons.sentiment_satisfied_alt),
+                  label: Text(strings.patientIsOkay),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () =>
+                      _verifyFall(emergency['id'].toString(), 'timeout'),
+                  icon: const Icon(Icons.timer_off_outlined),
+                  label: Text(strings.simulateNoResponse),
+                ),
+              ),
+            ]),
+          ],
+          if (status == 'acknowledged')
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () => _resolve(emergency['id'].toString()),
+                icon: const Icon(Icons.task_alt),
+                label: Text(strings.resolveEmergency),
+              ),
+            ),
+        ]),
       ),
     );
   }
@@ -2926,53 +2930,52 @@ class _ReportsTabState extends State<ReportsTab> {
                 setState(() => selectedPeriod = value.first),
           ),
           const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(children: [
-                SizedBox.square(
-                  dimension: 104,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CircularProgressIndicator(
-                        value: completion / 100,
-                        strokeWidth: 15,
-                        backgroundColor: RafeeqColors.lavender,
+          RafeeqGlowCard(
+            hero: true,
+            padding: const EdgeInsets.all(18),
+            child: Row(children: [
+              SizedBox.square(
+                dimension: 104,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CircularProgressIndicator(
+                      value: completion / 100,
+                      strokeWidth: 15,
+                      backgroundColor: RafeeqColors.lavender,
+                    ),
+                    Center(
+                      child: Text(
+                        '${completion.round()}%',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(color: RafeeqColors.primary),
                       ),
-                      Center(
-                        child: Text(
-                          '${completion.round()}%',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(color: RafeeqColors.primary),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(strings.dailyProgress,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${strings.completedActivitySessions}: ${data['total_activity_sessions']}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      Text(
-                        '${strings.totalEmergencies}: ${data['emergency_count']}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(strings.dailyProgress,
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${strings.completedActivitySessions}: ${data['total_activity_sessions']}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      '${strings.totalEmergencies}: ${data['emergency_count']}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
-              ]),
-            ),
+              ),
+            ]),
           ),
           const SizedBox(height: 14),
           _ReportCard(
@@ -2999,10 +3002,7 @@ class _ReportsTabState extends State<ReportsTab> {
               label: strings.conversation,
               value: '${data['conversation_interactions']}',
               icon: Icons.chat_bubble_outline_rounded),
-          Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(strings.medicalDisclaimer))),
+          RafeeqGlowCard(child: Text(strings.medicalDisclaimer)),
         ]);
       },
     );
@@ -3085,7 +3085,8 @@ class _SentReportsTabState extends State<SentReportsTab> {
               ),
             ),
             const SizedBox(height: 16),
-            Card(
+            RafeeqGlowCard(
+              padding: EdgeInsets.zero,
               child: ListTile(
                 contentPadding: const EdgeInsets.all(14),
                 leading: const CircleAvatar(
@@ -3104,12 +3105,7 @@ class _SentReportsTabState extends State<SentReportsTab> {
               ),
             ),
             const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(strings.medicalDisclaimer),
-              ),
-            ),
+            RafeeqGlowCard(child: Text(strings.medicalDisclaimer)),
           ],
         );
       },
@@ -3126,7 +3122,9 @@ class SettingsTab extends StatelessWidget {
     final strings = AppLocalizations.of(context)!;
     final patient = session.currentPatient!;
     return ListView(padding: const EdgeInsets.all(16), children: [
-      Card(
+      RafeeqGlowCard(
+        padding: EdgeInsets.zero,
+        hero: true,
         child: ListTile(
           contentPadding: const EdgeInsets.all(14),
           leading: CircleAvatar(
@@ -3190,7 +3188,8 @@ class SettingsTab extends StatelessWidget {
         onTap: () =>
             _showInformation(context, strings.privacyTitle, strings.privacy),
       ),
-      Card(
+      RafeeqGlowCard(
+        padding: EdgeInsets.zero,
         child: Column(children: [
           ListTile(
             leading: const CircleAvatar(
@@ -3235,7 +3234,8 @@ class SettingsTab extends StatelessWidget {
   }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 9),
-        child: Card(
+        child: RafeeqGlowCard(
+          padding: EdgeInsets.zero,
           child: ListTile(
             contentPadding: const EdgeInsetsDirectional.fromSTEB(12, 6, 10, 6),
             leading: CircleAvatar(

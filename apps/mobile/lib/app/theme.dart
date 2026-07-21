@@ -378,6 +378,8 @@ class RafeeqGlowCard extends StatelessWidget {
     this.glowColor = RafeeqColors.primary,
     this.borderColor = RafeeqColors.outline,
     this.hero = false,
+    this.width,
+    this.height,
     super.key,
   });
 
@@ -389,83 +391,89 @@ class RafeeqGlowCard extends StatelessWidget {
   final Color glowColor;
   final Color borderColor;
   final bool hero;
+  final double? width;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
     final borderRadius = BorderRadius.circular(radius);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: hero ? 0.28 : 0.16),
-            blurRadius: hero ? 32 : 22,
-            spreadRadius: hero ? -4 : -8,
-            offset: Offset(0, hero ? 16 : 10),
-          ),
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.75),
-            blurRadius: 16,
-            offset: const Offset(-5, -5),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: borderRadius,
-        child: InkWell(
-          onTap: onTap,
+    return SizedBox(
+      width: width,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: borderRadius,
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: gradient,
-              borderRadius: borderRadius,
-              border: Border.all(
-                color: borderColor.withValues(alpha: 0.92),
-                width: 1.2,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: glowColor.withValues(alpha: hero ? 0.28 : 0.16),
+              blurRadius: hero ? 32 : 22,
+              spreadRadius: hero ? -4 : -8,
+              offset: Offset(0, hero ? 16 : 10),
             ),
-            child: ClipRRect(
-              borderRadius: borderRadius,
-              child: Stack(
-                children: [
-                  PositionedDirectional(
-                    end: -42,
-                    bottom: -48,
-                    child: _GlowOrb(
-                      color: glowColor,
-                      size: hero ? 150 : 108,
-                      opacity: hero ? 0.24 : 0.15,
+            BoxShadow(
+              color: Colors.white.withValues(alpha: 0.75),
+              blurRadius: 16,
+              offset: const Offset(-5, -5),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: borderRadius,
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: borderRadius,
+                border: Border.all(
+                  color: borderColor.withValues(alpha: 0.92),
+                  width: 1.2,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: borderRadius,
+                child: Stack(
+                  children: [
+                    PositionedDirectional(
+                      end: -42,
+                      bottom: -48,
+                      child: _GlowOrb(
+                        color: glowColor,
+                        size: hero ? 150 : 108,
+                        opacity: hero ? 0.24 : 0.15,
+                      ),
                     ),
-                  ),
-                  PositionedDirectional(
-                    start: -32,
-                    top: -36,
-                    child: _GlowOrb(
-                      color: RafeeqColors.lavender,
-                      size: hero ? 120 : 92,
-                      opacity: 0.55,
+                    PositionedDirectional(
+                      start: -32,
+                      top: -36,
+                      child: _GlowOrb(
+                        color: RafeeqColors.lavender,
+                        size: hero ? 120 : 92,
+                        opacity: 0.55,
+                      ),
                     ),
-                  ),
-                  PositionedDirectional(
-                    start: 18,
-                    end: 18,
-                    top: 0,
-                    child: Container(
-                      height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white.withValues(alpha: 0),
-                            Colors.white.withValues(alpha: 0.86),
-                            Colors.white.withValues(alpha: 0),
-                          ],
+                    PositionedDirectional(
+                      start: 18,
+                      end: 18,
+                      top: 0,
+                      child: Container(
+                        height: 1,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0),
+                              Colors.white.withValues(alpha: 0.86),
+                              Colors.white.withValues(alpha: 0),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Padding(padding: padding, child: child),
-                ],
+                    Padding(padding: padding, child: child),
+                  ],
+                ),
               ),
             ),
           ),
