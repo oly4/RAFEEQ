@@ -313,6 +313,8 @@ def _start_daemon_voice_loop(
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     print("Voice transcript accepted during active wake session.")
             if _is_quiet_command(transcript):
+                locale = detect_spoken_locale(transcript)
+                speaker.speak(choose_locale_text(locale, "تمام.", "Okay."), locale)
                 voice_paused = True
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
