@@ -255,7 +255,16 @@ def _start_daemon_voice_loop(
                 external_pause_logged = False
             if voice_paused or external_paused:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
-                if wake_command is not None and _is_start_hearing_command(wake_command or transcript):
+                if wake_command is not None:
+                    if wake_command and _is_quiet_command(wake_command):
+                        voice_paused = True
+                        _set_terminal_voice_paused(True)
+                        external_pause_logged = True
+                        pending_transcript = None
+                        awake_until = 0.0
+                        print("Voice remains in quiet mode after repeated quiet command.")
+                        time.sleep(0.5)
+                        continue
                     locale = detect_spoken_locale(wake_command or transcript)
                     voice_paused = False
                     _set_terminal_voice_paused(False)
@@ -263,14 +272,20 @@ def _start_daemon_voice_loop(
                     pending_transcript = None
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     speaker.speak(
-                        choose_locale_text(locale, "رجعت أسمعك.", "I am listening again."),
+                        choose_locale_text(locale, "سمعتك.", "I heard you."),
                         locale,
                     )
                     print("Voice listening resumed by wake command.")
+                    if wake_command and not _is_start_hearing_command(wake_command):
+                        transcript = wake_command
+                        print(f"Wake command after quiet mode: {format_console_text(transcript)}")
+                    else:
+                        time.sleep(0.5)
+                        continue
                 else:
-                    print("Voice paused: waiting for 'RafeeQ start hearing'.")
-                time.sleep(0.5)
-                continue
+                    print("Voice paused: waiting for wake word.")
+                    time.sleep(0.5)
+                    continue
             if settings.voice_wake_word_required:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
                 if wake_command is None and now >= awake_until:
@@ -280,18 +295,32 @@ def _start_daemon_voice_loop(
                 if wake_command is not None:
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     locale = detect_spoken_locale(wake_command or transcript)
-                    speaker.speak(
-                        choose_locale_text(locale, "سمعتك.", "I heard you."),
-                        locale,
-                    )
                     if not wake_command:
+                        speaker.speak(
+                            choose_locale_text(locale, "سمعتك.", "I heard you."),
+                            locale,
+                        )
                         time.sleep(0.5)
                         continue
                     transcript = wake_command
+                    if not _is_quiet_command(transcript):
+                        speaker.speak(
+                            choose_locale_text(locale, "سمعتك.", "I heard you."),
+                            locale,
+                        )
                     print(f"Wake command: {format_console_text(transcript)}")
                 else:
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     print("Voice transcript accepted during active wake session.")
+            if _is_quiet_command(transcript):
+                voice_paused = True
+                _set_terminal_voice_paused(True)
+                external_pause_logged = True
+                pending_transcript = None
+                awake_until = 0.0
+                print("Voice quiet mode enabled by command; waiting for wake word.")
+                time.sleep(0.5)
+                continue
             if _is_stop_hearing_command(transcript):
                 locale = detect_spoken_locale(transcript)
                 voice_paused = True
@@ -452,6 +481,37 @@ def _is_stop_hearing_command(transcript: str) -> bool:
             "اسكت عن السماع",
             "وقف سماع الاوامر",
             "وقف سماع الأوامر",
+        ),
+    )
+
+
+def _is_quiet_command(transcript: str) -> bool:
+    return _contains_control_phrase(
+        transcript,
+        (
+            "be quiet",
+            "be quite",
+            "quiet",
+            "silent",
+            "silence",
+            "silnte",
+            "dont talk",
+            "don't talk",
+            "do not talk",
+            "stop talking",
+            "stop speaking",
+            "mute",
+            "shut up",
+            "اسكت",
+            "اسكت يا رفيق",
+            "اصمت",
+            "صامت",
+            "هدوء",
+            "لا تتكلم",
+            "لا تحكي",
+            "لا تتحدث",
+            "وقف الكلام",
+            "وقف التحدث",
         ),
     )
 

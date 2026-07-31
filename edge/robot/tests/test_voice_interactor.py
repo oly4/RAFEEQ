@@ -7,6 +7,7 @@ from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.application.openai_voice_agent import OpenAIRealtimeVoiceAgent
 from rafeeq_robot.application.reminder_service import ReminderService
 from rafeeq_robot.application.voice_interactor import VoiceIntentRouter
+from rafeeq_robot.main import _extract_wake_command, _is_quiet_command
 from rafeeq_robot.persistence.database import RobotDatabase
 from rafeeq_robot.persistence.models import LocalEvent, LocalOccurrence, LocalRoutine
 
@@ -253,3 +254,16 @@ def test_openai_voice_agent_without_key_uses_local_fallback(tmp_path: Path) -> N
     assert result.intent == "task_status_question"
     assert result.handled is True
     assert speaker.messages[-1] == "نعم، تم تسجيل أن مهمة Lunch أُنجزت."
+
+
+def test_voice_quiet_command_understands_english_typos_and_arabic() -> None:
+    assert _is_quiet_command("be quiet")
+    assert _is_quiet_command("be quite")
+    assert _is_quiet_command("silnte")
+    assert _is_quiet_command("اسكت يا رفيق")
+
+
+def test_paused_voice_can_resume_with_wake_word_only() -> None:
+    assert _extract_wake_command("Rafeeq", "يا رفيق,rafeeq") == ""
+    assert _extract_wake_command("يا رفيق", "يا رفيق,rafeeq") == ""
+    assert _extract_wake_command("Rafeeq add task", "يا رفيق,rafeeq") == "add task"
