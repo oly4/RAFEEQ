@@ -70,11 +70,15 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
         text = data.get("text")
         return text.strip() if isinstance(text, str) and text.strip() else None
 
-    def _record_wav(self, seconds: int) -> bytes:
+    def has_speech(self, timeout_seconds: int = 1, threshold: int | None = None) -> bool:
+        return bool(self._record_wav(max(1, timeout_seconds), threshold))
+
+    def _record_wav(self, seconds: int, silence_threshold: int | None = None) -> bytes:
+        threshold = self._silence_threshold if silence_threshold is None else silence_threshold
         if isinstance(self._input_device, str) and self._input_device.startswith(
             ("hw:", "plughw:")
         ):
-            return self._record_wav_with_arecord(seconds, self._input_device)
+            return self._record_wav_with_arecord(seconds, self._input_device, threshold)
         try:
             audio = self._sd.rec(
                 int(seconds * self._sample_rate),
@@ -87,7 +91,7 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
         finally:
             self._sd.stop()
         rms = float(self._np.sqrt(self._np.mean(self._np.square(audio.astype(self._np.float64)))))
-        if rms < self._silence_threshold:
+        if rms < threshold:
             return b""
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav_file:
@@ -97,7 +101,12 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
             wav_file.writeframes(audio.tobytes())
         return buffer.getvalue()
 
-    def _record_wav_with_arecord(self, seconds: int, input_device: str) -> bytes:
+    def _record_wav_with_arecord(
+        self,
+        seconds: int,
+        input_device: str,
+        silence_threshold: int,
+    ) -> bytes:
         result = subprocess.run(
             [
                 "arecord",
@@ -123,7 +132,7 @@ class OpenAITranscriptionVoiceInput(VoiceInputAdapter):
             reason = result.stderr.decode("utf-8", errors="replace").strip()
             raise RuntimeError(f"arecord failed for {input_device}: {reason}")
         data = result.stdout
-        if len(data) <= 44 or _wav_rms(data) < self._silence_threshold:
+        if len(data) <= 44 or _wav_rms(data) < silence_threshold:
             return b""
         return data
 

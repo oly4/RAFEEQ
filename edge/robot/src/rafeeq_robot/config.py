@@ -45,6 +45,9 @@ class RobotSettings(BaseSettings):
     startup_greeting_enabled: bool = True
     voice_upload_audio: bool = False
     voice_silence_threshold: int = 24
+    voice_barge_in_enabled: bool = True
+    voice_barge_in_check_seconds: int = 1
+    voice_barge_in_threshold: int = 900
     voice_confirm_before_response: bool = False
     voice_wake_word_required: bool = False
     voice_wake_words: str = "يا رفيق,يارفيق,رفيق,رافع,rafeeq,rafeeq"
