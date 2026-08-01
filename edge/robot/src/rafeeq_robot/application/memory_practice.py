@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 
 import httpx
 
+from rafeeq_robot.application.language import choose_locale_text, detect_spoken_locale
 from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.config import RobotSettings
 from rafeeq_robot.hardware.interfaces import SpeakerAdapter, VoiceInputAdapter
@@ -29,8 +30,7 @@ class MemoryPrompt:
         answers = [self.title, *self.people_labels]
         return tuple(answer for answer in answers if answer.strip())
 
-    @property
-    def hint(self) -> str:
+    def hint_for_locale(self, locale: str) -> str:
         if self.spoken_prompt:
             return self.spoken_prompt
         if self.description:
@@ -38,8 +38,16 @@ class MemoryPrompt:
         if self.people_labels:
             first = self.people_labels[0].split()
             if first:
-                return f"تبدأ بـ {first[0]}"
-        return "حاول تتذكر الاسم أو المناسبة."
+                return choose_locale_text(
+                    locale,
+                    f"تبدأ بـ {first[0]}",
+                    f"It starts with {first[0]}",
+                )
+        return choose_locale_text(
+            locale,
+            "حاول تتذكر الاسم أو المناسبة.",
+            "Try to remember the name or the occasion.",
+        )
 
 
 class MemoryPracticeService:
@@ -64,18 +72,34 @@ class MemoryPracticeService:
         if query is None:
             return False
 
-        memory = self._select_memory(query)
+        locale = detect_spoken_locale(transcript)
+        memory = self._select_memory(query, locale)
         if memory is None:
-            self._record_action(transcript, "ما لقيت ذكريات محفوظة في الألبوم.")
+            message = choose_locale_text(
+                locale,
+                "ما لقيت ذكريات محفوظة في الألبوم.",
+                "I could not find saved memories in the album.",
+            )
+            self._record_action(transcript, message)
             self.speaker.speak(
-                "ما لقيت ذكريات محفوظة في الألبوم. أضف صور أو ذكريات من التطبيق، وبعدها أختبرك فيها.",
-                "ar",
+                choose_locale_text(
+                    locale,
+                    "ما لقيت ذكريات محفوظة في الألبوم. أضف صور أو ذكريات من التطبيق، وبعدها أختبرك فيها.",
+                    "I could not find saved memories in the album. Add photos or memories "
+                    "from the app, then I can test you.",
+                ),
+                locale,
             )
             return True
 
+        action_text = choose_locale_text(
+            locale,
+            f"نبدأ اختبار الذاكرة: {memory.title}.",
+            f"Starting memory test: {memory.title}.",
+        )
         self._record_action(
             transcript,
-            f"نبدأ اختبار الذاكرة: {memory.title}.",
+            action_text,
             {
                 "memory_id": memory.id,
                 "memory_title": memory.title,
@@ -83,18 +107,40 @@ class MemoryPracticeService:
             },
         )
         if memory.media_type == "photo":
-            intro = f"أبشر. بفتح لك صورة {memory.title} في الألبوم، وراح أسألك عنها."
+            intro = choose_locale_text(
+                locale,
+                f"أبشر. بفتح لك صورة {memory.title} في الألبوم، وراح أسألك عنها.",
+                f"Sure. I will open the photo {memory.title} in the album and ask you about it.",
+            )
         else:
-            intro = f"أبشر. نبدأ اختبار ذكرى {memory.title}."
-        self.speaker.speak(intro, "ar")
+            intro = choose_locale_text(
+                locale,
+                f"أبشر. نبدأ اختبار ذكرى {memory.title}.",
+                f"Sure. Let's start the memory test for {memory.title}.",
+            )
+        self.speaker.speak(intro, locale)
         prompt = memory.spoken_prompt or memory.description
         if prompt:
-            self.speaker.speak(prompt, "ar")
-        self.speaker.speak("من تتذكر في هذه الذكرى؟", "ar")
+            self.speaker.speak(prompt, detect_spoken_locale(prompt))
+        self.speaker.speak(
+            choose_locale_text(
+                locale,
+                "من تتذكر في هذه الذكرى؟",
+                "Who do you remember in this memory?",
+            ),
+            locale,
+        )
 
         for attempt in range(1, 3):
             if attempt == 2:
-                self.speaker.speak(f"تلميح: {memory.hint}. جرّب مرة ثانية.", "ar")
+                self.speaker.speak(
+                    choose_locale_text(
+                        locale,
+                        f"تلميح: {memory.hint_for_locale(locale)}. جرّب مرة ثانية.",
+                        f"Hint: {memory.hint_for_locale(locale)}. Try one more time.",
+                    ),
+                    locale,
+                )
             _wait_until_done_speaking(self.speaker)
             answer = voice_input.listen_text(max(6, self.settings.voice_listen_seconds))
             if answer:
@@ -104,23 +150,34 @@ class MemoryPracticeService:
             matched = bool(answer and _is_matching_memory_answer(answer, memory))
             self._record_memory_result(memory, transcript, answer or "", matched, attempt)
             if matched:
-                self.speaker.speak("صح عليك، هذا تذكر جميل.", "ar")
+                self.speaker.speak(
+                    choose_locale_text(
+                        locale,
+                        "صح عليك، هذا تذكر جميل.",
+                        "Correct. That is a beautiful memory.",
+                    ),
+                    locale,
+                )
                 return True
 
         expected = " أو ".join(memory.accepted_answers[:3]) or memory.title
         self.speaker.speak(
-            f"ولا يهمك. الإجابة المتوقعة كانت: {expected}. نعيدها وقت ما تحب.",
-            "ar",
+            choose_locale_text(
+                locale,
+                f"ولا يهمك. الإجابة المتوقعة كانت: {expected}. نعيدها وقت ما تحب.",
+                f"No worries. The expected answer was: {expected}. We can try again anytime.",
+            ),
+            locale,
         )
         return True
 
-    def _select_memory(self, query: str) -> MemoryPrompt | None:
+    def _select_memory(self, query: str, locale: str) -> MemoryPrompt | None:
         memories = self._load_saved_memories()
         if not memories:
             return None
         normalized_query = _normalize_text(query)
         if not normalized_query:
-            return memories[0]
+            return _first_locale_match(memories, locale) or memories[0]
         scored = [
             (
                 max(
@@ -143,7 +200,7 @@ class MemoryPracticeService:
             for memory in memories
         ]
         score, memory = max(scored, key=lambda item: item[0])
-        return memory if score >= 0.35 else memories[0]
+        return memory if score >= 0.35 else (_first_locale_match(memories, locale) or memories[0])
 
     def _load_saved_memories(self) -> list[MemoryPrompt]:
         device_memories = self._load_device_saved_memories()
@@ -301,6 +358,21 @@ def _normalize_text(text: str) -> str:
         text = text.replace(source, target)
     text = re.sub(r"[^\w\s\u0600-\u06FF]", " ", text.lower())
     return " ".join(text.split())
+
+
+def _first_locale_match(memories: list[MemoryPrompt], locale: str) -> MemoryPrompt | None:
+    for memory in memories:
+        text = " ".join(
+            (
+                memory.title,
+                memory.description,
+                memory.spoken_prompt,
+                " ".join(memory.people_labels),
+            )
+        )
+        if detect_spoken_locale(text) == locale:
+            return memory
+    return None
 
 
 def _memories_from_payload(data: object) -> list[MemoryPrompt]:

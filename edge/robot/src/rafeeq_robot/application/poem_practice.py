@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 
 import httpx
 
+from rafeeq_robot.application.language import choose_locale_text, detect_spoken_locale
 from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.config import RobotSettings
 from rafeeq_robot.hardware.interfaces import SpeakerAdapter, VoiceInputAdapter
@@ -20,11 +21,14 @@ class PoemPrompt:
     poem_start: str
     expected_completion: str
 
-    @property
-    def hint(self) -> str:
+    def hint_for_locale(self, locale: str) -> str:
         words = self.expected_completion.strip().split()
         if not words:
-            return "تذكر أول كلمة من التكملة."
+            return choose_locale_text(
+                locale,
+                "تذكر أول كلمة من التكملة.",
+                "Try to remember the first word of the completion.",
+            )
         return " ".join(words[: min(3, len(words))])
 
 
@@ -50,31 +54,56 @@ class PoemPracticeService:
         if query is None:
             return False
 
-        poem = self._select_poem(query)
+        locale = detect_spoken_locale(transcript)
+        poem = self._select_poem(query, locale)
         if poem is None:
-            self._record_action(transcript, "ما لقيت قصيدة جاهزة. أضف قصيدة من الأنشطة أولاً.")
+            message = choose_locale_text(
+                locale,
+                "ما لقيت قصيدة جاهزة. أضف قصيدة من الأنشطة أولاً.",
+                "I could not find a saved poem. Add a poem from activities first.",
+            )
+            self._record_action(transcript, message)
             self.speaker.speak(
-                "ما لقيت قصيدة جاهزة. أضف قصيدة من صفحة الأنشطة أولاً، وبعدها أقدر أختبرك.",
-                "ar",
+                choose_locale_text(
+                    locale,
+                    "ما لقيت قصيدة جاهزة. أضف قصيدة من صفحة الأنشطة أولاً، وبعدها أقدر أختبرك.",
+                    "I could not find a saved poem. Add a poem from activities, "
+                    "then I can test you.",
+                ),
+                locale,
             )
             return True
 
+        action_text = choose_locale_text(
+            locale,
+            f"نبدأ تمرين قصيدة {poem.title}.",
+            f"Starting poem practice for {poem.title}.",
+        )
         self._record_action(
             transcript,
-            f"نبدأ تمرين قصيدة {poem.title}.",
+            action_text,
             {"poem_title": poem.title},
         )
         self.speaker.speak(
-            f"أبشر. نبدأ قصيدة {poem.title}. اسمع البداية، وبعدها كمل اللي تتذكره.",
-            "ar",
+            choose_locale_text(
+                locale,
+                f"أبشر. نبدأ قصيدة {poem.title}. اسمع البداية، وبعدها كمل اللي تتذكره.",
+                f"Sure. Let's start {poem.title}. Listen to the first phrase, "
+                "then complete what you remember.",
+            ),
+            locale,
         )
-        self.speaker.speak(poem.poem_start, "ar")
+        self.speaker.speak(poem.poem_start, detect_spoken_locale(poem.poem_start))
         for attempt in range(1, 3):
             self.speaker.speak(
-                "كمل القصيدة الآن."
+                choose_locale_text(locale, "كمل القصيدة الآن.", "Complete the poem now.")
                 if attempt == 1
-                else f"تلميح: {poem.hint}. جرّب مرة ثانية بهدوء.",
-                "ar",
+                else choose_locale_text(
+                    locale,
+                    f"تلميح: {poem.hint_for_locale(locale)}. جرّب مرة ثانية بهدوء.",
+                    f"Hint: {poem.hint_for_locale(locale)}. Try one more time slowly.",
+                ),
+                locale,
             )
             _wait_until_done_speaking(self.speaker)
             answer = voice_input.listen_text(max(6, self.settings.voice_listen_seconds))
@@ -84,25 +113,43 @@ class PoemPracticeService:
                 print(f"Poem answer attempt {attempt}: <no speech>")
             if answer and _is_matching_completion(answer, poem.expected_completion):
                 self._record_poem_result(poem, transcript, answer, matched=True, attempt=attempt)
-                self.speaker.speak("صح عليك، ممتاز. كملتها بشكل جميل.", "ar")
+                self.speaker.speak(
+                    choose_locale_text(
+                        locale,
+                        "صح عليك، ممتاز. كملتها بشكل جميل.",
+                        "Correct. Excellent work.",
+                    ),
+                    locale,
+                )
                 return True
             if attempt == 1:
-                self._record_poem_result(poem, transcript, answer or "", matched=False, attempt=attempt)
+                self._record_poem_result(
+                    poem,
+                    transcript,
+                    answer or "",
+                    matched=False,
+                    attempt=attempt,
+                )
 
         self._record_poem_result(poem, transcript, "", matched=False, attempt=2)
         self.speaker.speak(
-            f"ولا يهمك. التكملة هي: {poem.expected_completion}. نعيدها مرة ثانية وقت ما تحب.",
-            "ar",
+            choose_locale_text(
+                locale,
+                f"ولا يهمك. التكملة هي: {poem.expected_completion}. نعيدها مرة ثانية وقت ما تحب.",
+                f"No worries. The completion is: {poem.expected_completion}. "
+                "We can try again anytime.",
+            ),
+            locale,
         )
         return True
 
-    def _select_poem(self, query: str) -> PoemPrompt | None:
+    def _select_poem(self, query: str, locale: str) -> PoemPrompt | None:
         poems = self._load_saved_poems() or _BUILT_IN_POEMS
         if not poems:
             return None
         normalized_query = _normalize_text(query)
         if not normalized_query:
-            return poems[0]
+            return _first_locale_match(poems, locale) or poems[0]
         scored = [
             (
                 max(
@@ -114,7 +161,7 @@ class PoemPracticeService:
             for poem in poems
         ]
         score, poem = max(scored, key=lambda item: item[0])
-        return poem if score >= 0.35 else poems[0]
+        return poem if score >= 0.35 else (_first_locale_match(poems, locale) or poems[0])
 
     def _load_saved_poems(self) -> list[PoemPrompt]:
         device_poems = self._load_device_saved_poems()
@@ -280,9 +327,21 @@ def _normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def _first_locale_match(poems: list[PoemPrompt], locale: str) -> PoemPrompt | None:
+    for poem in poems:
+        text = f"{poem.title} {poem.poem_start} {poem.expected_completion}"
+        if detect_spoken_locale(text) == locale:
+            return poem
+    return None
+
+
 _BUILT_IN_POEMS: list[PoemPrompt] = [
     PoemPrompt("صوت صفير البلبل", "صوت صفير البلبل", "هيج قلبي الثمل"),
-    PoemPrompt("إذا الشعب يوما أراد الحياة", "إذا الشعب يوما أراد الحياة", "فلا بد أن يستجيب القدر"),
+    PoemPrompt(
+        "إذا الشعب يوما أراد الحياة",
+        "إذا الشعب يوما أراد الحياة",
+        "فلا بد أن يستجيب القدر",
+    ),
     PoemPrompt("قفا نبك", "قفا نبك من ذكرى حبيب ومنزل", "بسقط اللوى بين الدخول فحومل"),
     PoemPrompt("Twinkle", "Twinkle twinkle little star", "how I wonder what you are"),
 ]
