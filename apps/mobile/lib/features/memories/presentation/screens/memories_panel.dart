@@ -1141,17 +1141,30 @@ class _CategoryStrip extends StatelessWidget {
   String _localizedCategoryName(BuildContext context, Object? value) {
     final raw = value?.toString().trim() ?? '';
     final normalized = raw.toLowerCase();
+    final arabicNormalized = raw
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    if (normalized == 'family' || raw == 'العائلة') {
+    if (normalized == 'family' ||
+        arabicNormalized == 'العائله' ||
+        arabicNormalized.contains('عائله')) {
       return isArabic ? 'العائلة' : 'Family';
     }
-    if (normalized == 'friends' || raw == 'الأصدقاء' || raw == 'الاصدقاء') {
+    if (normalized == 'friends' ||
+        arabicNormalized == 'الاصدقاء' ||
+        arabicNormalized.contains('اصدقاء')) {
       return isArabic ? 'الأصدقاء' : 'Friends';
     }
-    if (normalized == 'events' || raw == 'الأحداث' || raw == 'الاحداث') {
+    if (normalized == 'events' ||
+        arabicNormalized == 'الاحداث' ||
+        arabicNormalized.contains('احداث')) {
       return isArabic ? 'الأحداث' : 'Events';
     }
-    if (normalized == 'new memories' || raw == 'ذكريات جديدة') {
+    if (normalized == 'new memories' || arabicNormalized == 'ذكريات جديده') {
       return isArabic ? 'ذكريات جديدة' : 'New memories';
     }
     return raw;
