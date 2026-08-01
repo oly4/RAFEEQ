@@ -1,4 +1,5 @@
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -75,7 +76,7 @@ def main() -> None:
         emergencies=emergencies,
         snooze_minutes=settings.voice_reminder_snooze_minutes,
     )
-    sos_button = _start_sos_button_listener(settings, emergencies, outbox)
+    sos_button = _start_sos_button_listener(settings, emergencies, outbox, speaker)
     voice = _create_voice_agent(settings, local_voice, reminders, speaker)
     voice_input = _create_voice_input(settings)
     poems = PoemPracticeService(settings, outbox, speaker)
@@ -145,6 +146,7 @@ def _start_sos_button_listener(
     settings: RobotSettings,
     emergencies: EmergencyManager,
     outbox: OutboxService,
+    speaker: SpeakerAdapter,
 ) -> object | None:
     if not settings.sos_button_enabled or settings.hardware_mode != "raspberry_pi":
         return None
@@ -156,12 +158,17 @@ def _start_sos_button_listener(
         return None
 
     last_pressed_at = 0.0
+    shutdown_requested = False
     lock = threading.Lock()
 
-    def on_pressed() -> None:
-        nonlocal last_pressed_at
+    def on_released() -> None:
+        nonlocal last_pressed_at, shutdown_requested
         now = time.monotonic()
         with lock:
+            if shutdown_requested:
+                shutdown_requested = False
+                print("SOS button release ignored after shutdown hold.")
+                return
             if now - last_pressed_at < settings.sos_button_cooldown_seconds:
                 print("SOS button press ignored during cooldown.")
                 return
@@ -173,21 +180,80 @@ def _start_sos_button_listener(
         except Exception as exc:
             print(f"SOS button handling failed: {exc}")
 
+    def on_held() -> None:
+        nonlocal shutdown_requested
+        if not settings.sos_button_shutdown_enabled:
+            return
+        with lock:
+            if shutdown_requested:
+                return
+            shutdown_requested = True
+        print("SOS button held; shutdown requested.")
+        threading.Thread(
+            target=_speak_goodbye_and_shutdown,
+            args=(settings, speaker),
+            daemon=True,
+        ).start()
+
     try:
         factory = LGPIOFactory()
         button = Button(
             settings.sos_button_gpio,
             pull_up=settings.sos_button_pull_up,
             bounce_time=settings.sos_button_bounce_seconds,
+            hold_time=settings.sos_button_shutdown_hold_seconds,
+            hold_repeat=False,
             pin_factory=factory,
         )
-        button.when_pressed = on_pressed
+        button.when_released = on_released
+        button.when_held = on_held
         wiring = "GPIO to GND" if settings.sos_button_pull_up else "GPIO to 3.3V"
-        print(f"SOS button active on BCM GPIO {settings.sos_button_gpio} ({wiring}).")
+        print(
+            f"SOS button active on BCM GPIO {settings.sos_button_gpio} ({wiring}); "
+            f"hold {settings.sos_button_shutdown_hold_seconds:g}s to shutdown."
+        )
         return button
     except Exception as exc:
         print(f"SOS button disabled: could not open GPIO {settings.sos_button_gpio}: {exc}")
     return None
+
+
+def _speak_goodbye_and_shutdown(settings: RobotSettings, speaker: SpeakerAdapter) -> None:
+    locale = (
+        settings.voice_default_locale
+        if settings.voice_default_locale in {"ar", "en"}
+        else "en"
+    )
+    message = _sos_shutdown_goodbye_message(locale)
+    try:
+        speaker.speak(message, locale)
+        _wait_until_speaker_idle(speaker, timeout_seconds=12)
+    except Exception as exc:
+        print(f"SOS shutdown goodbye failed: {exc}")
+    command = shlex.split(settings.sos_button_shutdown_command)
+    if not command:
+        print("SOS shutdown skipped: shutdown command is empty.")
+        return
+    try:
+        print(f"SOS shutdown command: {command[0]} ...")
+        subprocess.run(command, check=False, timeout=15)
+    except Exception as exc:
+        print(f"SOS shutdown command failed: {exc}")
+
+
+def _sos_shutdown_goodbye_message(locale: str) -> str:
+    return choose_locale_text(
+        locale,
+        "مع السلامة. سأغلق الجهاز الآن.",
+        "Goodbye. I will shut down now.",
+    )
+
+
+def _wait_until_speaker_idle(speaker: SpeakerAdapter, timeout_seconds: float) -> None:
+    is_speaking = getattr(speaker, "is_speaking", None)
+    deadline = time.monotonic() + timeout_seconds
+    while callable(is_speaking) and is_speaking() and time.monotonic() < deadline:
+        time.sleep(0.1)
 
 
 def _synchronize_quietly(sync: SyncService) -> None:

@@ -179,6 +179,9 @@ SOS_BUTTON_GPIO=17
 SOS_BUTTON_PULL_UP=true
 SOS_BUTTON_BOUNCE_SECONDS=0.15
 SOS_BUTTON_COOLDOWN_SECONDS=5
+SOS_BUTTON_SHUTDOWN_ENABLED=true
+SOS_BUTTON_SHUTDOWN_HOLD_SECONDS=3
+SOS_BUTTON_SHUTDOWN_COMMAND='sudo -n /usr/bin/systemctl poweroff'
 VOICE_INTERACTION_PROVIDER=vosk
 VOICE_REASONING_PROVIDER=local
 SPEAKER_PROVIDER=espeak
@@ -209,6 +212,15 @@ Demo doctor:
   doctor@demo.rafeeq.app / ${DEMO_DOCTOR_PASSWORD:-Rafeeq-Test-2026!}
 EOF
   chmod 644 /etc/rafeeq/summary.txt
+}
+
+install_sudoers() {
+  log "Installing RAFEEQ limited sudo permissions"
+  cat >/etc/sudoers.d/rafeeq-poweroff <<EOF
+${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff, /usr/sbin/shutdown -h now
+EOF
+  chmod 440 /etc/sudoers.d/rafeeq-poweroff
+  visudo -cf /etc/sudoers.d/rafeeq-poweroff >/dev/null
 }
 
 install_services() {
@@ -258,6 +270,7 @@ main() {
 
   write_env_files
   seed_and_write_robot_env
+  install_sudoers
   install_services
 
   log "Done"

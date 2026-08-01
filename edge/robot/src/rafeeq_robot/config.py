@@ -23,6 +23,9 @@ class RobotSettings(BaseSettings):
     sos_button_pull_up: bool = True
     sos_button_bounce_seconds: float = 0.15
     sos_button_cooldown_seconds: int = 5
+    sos_button_shutdown_enabled: bool = True
+    sos_button_shutdown_hold_seconds: float = 3.0
+    sos_button_shutdown_command: str = "sudo -n /usr/bin/systemctl poweroff"
     voice_interaction_provider: str = "simulation"
     vosk_model_path: str = "./.run/models/vosk-ar"
     vosk_input_device: int | str | None = None

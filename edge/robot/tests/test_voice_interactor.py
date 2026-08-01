@@ -16,6 +16,7 @@ from rafeeq_robot.main import (
     _is_vague_test_request,
     _language_switch_locale,
     _local_app_action,
+    _sos_shutdown_goodbye_message,
 )
 from rafeeq_robot.persistence.database import RobotDatabase
 from rafeeq_robot.persistence.models import LocalEvent, LocalOccurrence, LocalRoutine
@@ -374,3 +375,8 @@ def test_voice_language_switch_commands() -> None:
     assert _language_switch_locale("تكلم عربي") == "ar"
     assert _language_switch_locale("speak English") == "en"
     assert _language_switch_locale("تكلم انجليزي") == "en"
+
+
+def test_sos_shutdown_goodbye_message_is_bilingual() -> None:
+    assert _sos_shutdown_goodbye_message("en") == "Goodbye. I will shut down now."
+    assert _sos_shutdown_goodbye_message("ar") == "مع السلامة. سأغلق الجهاز الآن."
