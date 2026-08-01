@@ -326,7 +326,10 @@ def test_voice_quiet_command_understands_english_typos_and_arabic() -> None:
 def test_paused_voice_can_resume_with_wake_word_only() -> None:
     assert _extract_wake_command("Rafeeq", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("يا رفيق", "يا رفيق,rafeeq") == ""
+    assert _extract_wake_command("Rafiq?", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("Rafeeq add task", "يا رفيق,rafeeq") == "add task"
+    assert _extract_wake_command("Rafeeq, start memory test", "يا رفيق,rafeeq") == "start memory test"
+    assert _extract_wake_command("Trafikk", "يا رفيق,rafeeq") is None
 
 
 def test_voice_accepts_one_actionable_followup_after_wake_word() -> None:

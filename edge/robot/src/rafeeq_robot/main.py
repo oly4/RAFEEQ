@@ -1,5 +1,6 @@
-import sys
+import re
 import subprocess
+import sys
 import time
 import tempfile
 import threading
@@ -785,12 +786,31 @@ def _extract_wake_command(transcript: str, wake_words: str) -> str | None:
     for pattern in patterns:
         if not pattern:
             continue
+        if _is_latin_wake_pattern(pattern):
+            match = re.search(
+                rf"(?<![a-z0-9]){re.escape(pattern)}(?![a-z0-9])",
+                normalized,
+            )
+            if match:
+                return _clean_wake_command(normalized[match.end() :])
+            continue
         compact_pattern = pattern.replace(" ", "")
         if pattern in normalized:
-            return normalized.split(pattern, 1)[1].strip()
-        if compact_pattern and compact_pattern in compact:
-            return normalized.replace(pattern, "", 1).strip()
+            return _clean_wake_command(normalized.split(pattern, 1)[1])
+        if compact_pattern and compact.startswith(compact_pattern):
+            return ""
     return None
+
+
+def _is_latin_wake_pattern(pattern: str) -> bool:
+    return bool(re.search(r"[a-z]", pattern))
+
+
+def _clean_wake_command(command: str) -> str:
+    cleaned = command.strip(" \t\r\n.,!?؟،؛:;-_()[]{}\"'")
+    if not re.search(r"[0-9a-z\u0600-\u06ff]", cleaned):
+        return ""
+    return cleaned
 
 
 def _normalize_wake_text(text: str) -> str:
