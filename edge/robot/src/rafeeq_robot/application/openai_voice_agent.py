@@ -105,7 +105,7 @@ class OpenAIRealtimeVoiceAgent:
                 "Current synced RAFEEQ tasks JSON:\n"
                 f"{json.dumps(task_context, ensure_ascii=False)}"
             ),
-            "max_output_tokens": 220,
+            "max_output_tokens": 600,
         }
         if self.reasoning_effort and _supports_reasoning_effort(self.text_model):
             payload["reasoning"] = {"effort": self.reasoning_effort}
@@ -560,8 +560,7 @@ when the patient clearly asks. You may trigger app actions for album, activities
 photo exercises, and poem exercises. Do not directly create caregiver-owned
 schedules from patient voice; ask the caregiver to confirm schedule changes.
 Do not claim a task or medicine was completed unless the tool output says it is
-completed. Keep spoken answers short: one sentence, usually under 18 words,
-unless the user asks for details.
+completed. Keep answers one sentence unless the user asks for details.
 Do not use Markdown, bullets, asterisks, emoji, or raw status labels in spoken
 answers. Translate stored status values into the response language before speaking.
 """.strip()
@@ -569,7 +568,7 @@ answers. Translate stored status values into the response language before speaki
 
 _TEXT_PLANNER_INSTRUCTIONS = (
     _SYSTEM_INSTRUCTIONS
-    + "\nReturn only compact JSON. Keep assistant_text short and direct. Allowed actions: answer, complete_task, snooze_task, "
+    + "\nReturn only compact JSON. Allowed actions: answer, complete_task, snooze_task, "
     "decline_task, undo_complete_task, request_help, open_album, open_activities, "
     "start_poem_test, start_photo_test, start_activity, open_routine, open_dashboard, "
     "open_settings, request_add_task, request_edit_task, request_delete_task. "

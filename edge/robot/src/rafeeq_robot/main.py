@@ -227,19 +227,18 @@ def _start_daemon_voice_loop(
                 time.sleep(0.5)
                 continue
             mic_reserved_logged = False
+            is_speaking = getattr(speaker, "is_speaking", None)
+            while callable(is_speaking) and is_speaking():
+                time.sleep(0.25)
             started_at = time.monotonic()
-            transcript = _listen_after_speech_or_barge_in(speaker, voice_input, settings)
-            barge_in_transcript = transcript is not None
-            if transcript is None:
-                started_at = time.monotonic()
-                try:
-                    transcript = voice_input.listen_text(settings.voice_listen_seconds)
-                except Exception as exc:
-                    print(f"Voice listening failed: {exc}")
-                    time.sleep(5)
-                    continue
+            try:
+                transcript = voice_input.listen_text(settings.voice_listen_seconds)
+            except Exception as exc:
+                print(f"Voice listening failed: {exc}")
+                time.sleep(5)
+                continue
             spoke_since = getattr(speaker, "spoke_since", None)
-            if not barge_in_transcript and callable(spoke_since) and spoke_since(started_at):
+            if callable(spoke_since) and spoke_since(started_at):
                 print("Voice transcript skipped because RAFEEQ spoke during recording.")
                 time.sleep(0.5)
                 continue
@@ -411,48 +410,6 @@ def _start_daemon_voice_loop(
             time.sleep(0.5)
 
     threading.Thread(target=worker, daemon=True).start()
-
-
-def _listen_after_speech_or_barge_in(
-    speaker: SpeakerAdapter,
-    voice_input: VoiceInputAdapter,
-    settings: RobotSettings,
-) -> str | None:
-    is_speaking = getattr(speaker, "is_speaking", None)
-    if not callable(is_speaking):
-        return None
-    has_speech = getattr(voice_input, "has_speech", None)
-    stop_speaking = getattr(speaker, "stop", None)
-    if not settings.voice_barge_in_enabled or not callable(has_speech) or not callable(stop_speaking):
-        while is_speaking():
-            time.sleep(0.25)
-        return None
-
-    while is_speaking():
-        try:
-            heard_user = bool(
-                has_speech(
-                    max(1, settings.voice_barge_in_check_seconds),
-                    max(settings.voice_barge_in_threshold, settings.voice_silence_threshold),
-                )
-            )
-        except Exception as exc:
-            print(f"Voice barge-in check skipped: {exc}")
-            while is_speaking():
-                time.sleep(0.25)
-            return None
-        if not heard_user:
-            time.sleep(0.05)
-            continue
-        stop_speaking()
-        print("Voice barge-in detected; RAFEEQ stopped talking and is listening.")
-        time.sleep(0.15)
-        try:
-            return voice_input.listen_text(settings.voice_listen_seconds)
-        except Exception as exc:
-            print(f"Voice listening after barge-in failed: {exc}")
-            return None
-    return None
 
 
 def _is_voice_confirmation(transcript: str) -> bool:
@@ -874,93 +831,43 @@ class EspeakSpeaker:
         self._lock = threading.Lock()
         self._speaking_until = 0.0
         self._last_speak_started = 0.0
-        self._playback_process = None
-        self._playback_path: Path | None = None
 
     def is_speaking(self) -> bool:
         with self._lock:
-            self._cleanup_finished_locked()
-            if self._playback_process is not None and self._playback_process.poll() is None:
-                return True
             return time.monotonic() < self._speaking_until
 
     def spoke_since(self, started_at: float) -> bool:
         with self._lock:
             return self._last_speak_started >= started_at
 
-    def stop(self) -> None:
-        with self._lock:
-            self._stop_locked()
-
     def speak(self, text: str, locale: str = "ar") -> None:
         print(f"[{locale}] {format_console_text(text)}")
-        wav_path = Path(tempfile.gettempdir()) / f"rafeeq-espeak-{uuid4()}.wav"
         with self._lock:
-            self._stop_locked()
             self._last_speak_started = time.monotonic()
             self._speaking_until = time.monotonic() + 3600
-        try:
-            result = subprocess.run(
-                [
-                    "espeak-ng",
-                    "-v",
-                    "ar" if locale == "ar" else "en",
-                    "-s",
-                    str(self.rate),
-                    "-a",
-                    str(self.volume),
-                    "-w",
-                    str(wav_path),
-                    clean_speech_text(text),
-                ],
-                check=False,
-                stderr=subprocess.PIPE,
-            )
-            if result.returncode == 0 and wav_path.exists() and wav_path.stat().st_size > 0:
-                self._start_playback(wav_path)
-                return
-        finally:
-            with self._lock:
-                if self._playback_path != wav_path:
-                    wav_path.unlink(missing_ok=True)
-                if self._playback_process is None:
-                    self._speaking_until = time.monotonic() + 0.25
-
-    def _start_playback(self, wav_path: Path) -> None:
-        process = subprocess.Popen(
-            ["aplay", "-q", "-D", self.output_device, str(wav_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        with self._lock:
-            self._playback_process = process
-            self._playback_path = wav_path
-            self._speaking_until = time.monotonic() + 3600
-
-    def _cleanup_finished_locked(self) -> None:
-        if self._playback_process is None:
-            return
-        if self._playback_process.poll() is None:
-            return
-        if self._playback_path is not None:
-            self._playback_path.unlink(missing_ok=True)
-        self._playback_process = None
-        self._playback_path = None
-        self._speaking_until = time.monotonic() + 0.25
-
-    def _stop_locked(self) -> None:
-        if self._playback_process is not None and self._playback_process.poll() is None:
-            self._playback_process.terminate()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
             try:
-                self._playback_process.wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                self._playback_process.kill()
-                self._playback_process.wait(timeout=0.5)
-        if self._playback_path is not None:
-            self._playback_path.unlink(missing_ok=True)
-        self._playback_process = None
-        self._playback_path = None
-        self._speaking_until = time.monotonic() + 0.25
+                result = subprocess.run(
+                    [
+                        "espeak-ng",
+                        "-v",
+                        "ar" if locale == "ar" else "en",
+                        "-s",
+                        str(self.rate),
+                        "-a",
+                        str(self.volume),
+                        "-w",
+                        wav_file.name,
+                        clean_speech_text(text),
+                    ],
+                    check=False,
+                    stderr=subprocess.PIPE,
+                )
+                if result.returncode == 0:
+                    subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
+            finally:
+                with self._lock:
+                    self._speaking_until = time.monotonic() + 1.0
 
 
 class OpenAITTSSpeaker:
@@ -973,23 +880,14 @@ class OpenAITTSSpeaker:
         self._lock = threading.Lock()
         self._speaking_until = 0.0
         self._last_speak_started = 0.0
-        self._playback_process = None
-        self._playback_path: Path | None = None
 
     def is_speaking(self) -> bool:
         with self._lock:
-            self._cleanup_finished_locked()
-            if self._playback_process is not None and self._playback_process.poll() is None:
-                return True
             return time.monotonic() < self._speaking_until
 
     def spoke_since(self, started_at: float) -> bool:
         with self._lock:
             return self._last_speak_started >= started_at
-
-    def stop(self) -> None:
-        with self._lock:
-            self._stop_locked()
 
     def speak(self, text: str, locale: str = "ar") -> None:
         print(f"[{locale}] {format_console_text(text)}")
@@ -997,7 +895,6 @@ class OpenAITTSSpeaker:
             self.fallback.speak(text, locale)
             return
         with self._lock:
-            self._stop_locked()
             self._last_speak_started = time.monotonic()
             self._speaking_until = time.monotonic() + 3600
         try:
@@ -1018,52 +915,16 @@ class OpenAITTSSpeaker:
                 timeout=15,
             )
             response.raise_for_status()
-            wav_path = Path(tempfile.gettempdir()) / f"rafeeq-openai-tts-{uuid4()}.wav"
-            wav_path.write_bytes(response.content)
-            self._start_playback(wav_path)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
+                wav_file.write(response.content)
+                wav_file.flush()
+                subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
         except Exception as exc:
             print(f"OpenAI TTS unavailable; using espeak fallback: {exc}")
             self.fallback.speak(text, locale)
         finally:
             with self._lock:
-                if self._playback_process is None:
-                    self._speaking_until = time.monotonic() + 0.25
-
-    def _start_playback(self, wav_path: Path) -> None:
-        process = subprocess.Popen(
-            ["aplay", "-q", "-D", self.output_device, str(wav_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        with self._lock:
-            self._playback_process = process
-            self._playback_path = wav_path
-            self._speaking_until = time.monotonic() + 3600
-
-    def _cleanup_finished_locked(self) -> None:
-        if self._playback_process is None:
-            return
-        if self._playback_process.poll() is None:
-            return
-        if self._playback_path is not None:
-            self._playback_path.unlink(missing_ok=True)
-        self._playback_process = None
-        self._playback_path = None
-        self._speaking_until = time.monotonic() + 0.25
-
-    def _stop_locked(self) -> None:
-        if self._playback_process is not None and self._playback_process.poll() is None:
-            self._playback_process.terminate()
-            try:
-                self._playback_process.wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                self._playback_process.kill()
-                self._playback_process.wait(timeout=0.5)
-        if self._playback_path is not None:
-            self._playback_path.unlink(missing_ok=True)
-        self._playback_process = None
-        self._playback_path = None
-        self._speaking_until = time.monotonic() + 0.25
+                self._speaking_until = time.monotonic() + 1.0
 
 
 if __name__ == "__main__":
