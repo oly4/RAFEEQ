@@ -1123,7 +1123,7 @@ class _CategoryStrip extends StatelessWidget {
                     color: RafeeqColors.primary),
                 const Spacer(),
                 Text(
-                  category['name'].toString(),
+                  _localizedCategoryName(context, category['name']),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w900),
@@ -1136,6 +1136,25 @@ class _CategoryStrip extends StatelessWidget {
         },
       ),
     );
+  }
+
+  String _localizedCategoryName(BuildContext context, Object? value) {
+    final raw = value?.toString().trim() ?? '';
+    final normalized = raw.toLowerCase();
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    if (normalized == 'family' || raw == 'العائلة') {
+      return isArabic ? 'العائلة' : 'Family';
+    }
+    if (normalized == 'friends' || raw == 'الأصدقاء' || raw == 'الاصدقاء') {
+      return isArabic ? 'الأصدقاء' : 'Friends';
+    }
+    if (normalized == 'events' || raw == 'الأحداث' || raw == 'الاحداث') {
+      return isArabic ? 'الأحداث' : 'Events';
+    }
+    if (normalized == 'new memories' || raw == 'ذكريات جديدة') {
+      return isArabic ? 'ذكريات جديدة' : 'New memories';
+    }
+    return raw;
   }
 }
 

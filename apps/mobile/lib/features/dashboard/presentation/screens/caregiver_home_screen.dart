@@ -1725,107 +1725,19 @@ class _RoutineTabState extends State<RoutineTab> {
               final item = items[index - 2];
               final occurrence = item['occurrence'] as Map<String, dynamic>?;
               final complete = occurrence?['status'] == 'completed';
-              return RafeeqGlowCard(
-                padding: EdgeInsets.zero,
-                glowColor:
-                    complete ? RafeeqColors.success : RafeeqColors.primary,
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsetsDirectional.fromSTEB(12, 7, 10, 7),
-                  leading: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      gradient: complete
-                          ? const LinearGradient(
-                              colors: [Color(0xFFE1F7EC), Colors.white],
-                            )
-                          : RafeeqGradients.softCardFor(
-                              Theme.of(context).brightness,
-                            ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: (complete
-                                  ? RafeeqColors.success
-                                  : RafeeqColors.primary)
-                              .withValues(alpha: 0.16),
-                          blurRadius: 14,
-                          offset: const Offset(0, 7),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      item['type'] == 'medication'
-                          ? Icons.medication_outlined
-                          : Icons.event_note_outlined,
-                      color: complete
-                          ? RafeeqColors.success
-                          : RafeeqColors.primary,
-                    ),
-                  ),
-                  title: Text(item['title'].toString()),
-                  subtitle: Text(
-                      '${localizedClockTime(context, item['scheduled_local_time'])} • '
-                      '${localizedStatus(strings, occurrence?['status'] ?? 'pending')}'),
-                  trailing: Wrap(
-                    spacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      if (complete)
-                        IconButton(
-                          tooltip:
-                              _copy(context, 'إزالة علامة تم', 'Mark not done'),
-                          onPressed: occurrence == null
-                              ? null
-                              : () =>
-                                  _undoComplete(occurrence['id'].toString()),
-                          icon: const Icon(Icons.check_circle_outline_rounded,
-                              color: RafeeqColors.success, size: 29),
-                        )
-                      else if (occurrence == null)
-                        const Icon(Icons.circle_outlined,
-                            color: RafeeqColors.outline, size: 29)
-                      else
-                        FilledButton.tonal(
-                          onPressed: () =>
-                              _complete(occurrence['id'].toString()),
-                          child: Text(strings.complete),
-                        ),
-                      PopupMenuButton<String>(
-                        tooltip: _copy(context, 'خيارات', 'Options'),
-                        onSelected: (value) {
-                          if (value == 'edit') {
-                            _editRoutine(item);
-                          } else if (value == 'delete') {
-                            _deleteRoutine(item);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 'edit',
-                            child: ListTile(
-                              leading: const Icon(Icons.edit_outlined),
-                              title: Text(_copy(context, 'تعديل', 'Edit')),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: ListTile(
-                              leading: const Icon(Icons.delete_outline,
-                                  color: RafeeqColors.danger),
-                              title: Text(
-                                _copy(context, 'حذف', 'Delete'),
-                                style:
-                                    const TextStyle(color: RafeeqColors.danger),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              return _RoutineItemCard(
+                item: item,
+                occurrence: occurrence,
+                complete: complete,
+                strings: strings,
+                onComplete: occurrence == null
+                    ? null
+                    : () => _complete(occurrence['id'].toString()),
+                onUndoComplete: occurrence == null
+                    ? null
+                    : () => _undoComplete(occurrence['id'].toString()),
+                onEdit: () => _editRoutine(item),
+                onDelete: () => _deleteRoutine(item),
               );
             },
           );
@@ -2275,6 +2187,144 @@ class _RoutineTabState extends State<RoutineTab> {
     final minute = int.tryParse(parts[1]);
     if (hour == null || minute == null) return null;
     return TimeOfDay(hour: hour, minute: minute);
+  }
+}
+
+class _RoutineItemCard extends StatelessWidget {
+  const _RoutineItemCard({
+    required this.item,
+    required this.occurrence,
+    required this.complete,
+    required this.strings,
+    required this.onComplete,
+    required this.onUndoComplete,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final Map<String, dynamic> item;
+  final Map<String, dynamic>? occurrence;
+  final bool complete;
+  final AppLocalizations strings;
+  final VoidCallback? onComplete;
+  final VoidCallback? onUndoComplete;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = complete ? RafeeqColors.success : RafeeqColors.primary;
+    return RafeeqGlowCard(
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 8, 12),
+      glowColor: accent,
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              gradient: complete
+                  ? const LinearGradient(
+                      colors: [Color(0xFFE1F7EC), Colors.white],
+                    )
+                  : RafeeqGradients.softCardFor(Theme.of(context).brightness),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.16),
+                  blurRadius: 14,
+                  offset: const Offset(0, 7),
+                ),
+              ],
+            ),
+            child: Icon(
+              item['type'] == 'medication'
+                  ? Icons.medication_outlined
+                  : Icons.event_note_outlined,
+              color: accent,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['title'].toString(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${localizedClockTime(context, item['scheduled_local_time'])} • '
+                  '${localizedStatus(strings, occurrence?['status'] ?? 'pending')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (complete)
+            IconButton.filledTonal(
+              tooltip: _RoutineTabState._copy(
+                  context, 'إزالة علامة تم', 'Mark not done'),
+              onPressed: onUndoComplete,
+              icon: const Icon(
+                Icons.check_circle_outline_rounded,
+                color: RafeeqColors.success,
+              ),
+            )
+          else if (occurrence == null)
+            const Icon(Icons.circle_outlined,
+                color: RafeeqColors.outline, size: 29)
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 118),
+              child: FilledButton.tonal(
+                onPressed: onComplete,
+                child: FittedBox(child: Text(strings.complete)),
+              ),
+            ),
+          PopupMenuButton<String>(
+            tooltip: _RoutineTabState._copy(context, 'خيارات', 'Options'),
+            onSelected: (value) {
+              if (value == 'edit') {
+                onEdit();
+              } else if (value == 'delete') {
+                onDelete();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: Text(_RoutineTabState._copy(context, 'تعديل', 'Edit')),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: RafeeqColors.danger,
+                  ),
+                  title: Text(
+                    _RoutineTabState._copy(context, 'حذف', 'Delete'),
+                    style: const TextStyle(color: RafeeqColors.danger),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

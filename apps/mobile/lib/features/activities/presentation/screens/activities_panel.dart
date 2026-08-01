@@ -102,29 +102,12 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
               final activity = snapshot.data![activityIndex];
               final duration =
                   (activity['duration_minutes'] as num?)?.toInt() ?? 0;
-              return RafeeqGlowCard(
-                padding: EdgeInsets.zero,
-                child: ListTile(
-                  leading: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      gradient: RafeeqGradients.softCardFor(
-                        Theme.of(context).brightness,
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.psychology_alt_outlined),
-                  ),
-                  title: Text(activity['title'].toString()),
-                  subtitle: Text(
-                      '${localizedActivityType(strings, activity['type'])} '
-                      '• ${strings.activityDuration(duration)}'),
-                  trailing: FilledButton.tonal(
-                    onPressed: () => _start(activity),
-                    child: Text(strings.start),
-                  ),
-                ),
+              return _ActivityCard(
+                activity: activity,
+                duration: duration,
+                strings: strings,
+                onStart: () => _start(activity),
+                onDelete: () => _deleteActivity(activity),
               );
             },
           );
@@ -213,6 +196,51 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(strings.activityCompletionRecorded)));
+      }
+    }
+  }
+
+  Future<void> _deleteActivity(Map<String, dynamic> activity) async {
+    final strings = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.delete_outline, color: RafeeqColors.danger),
+        title: Text(_copy(context, 'حذف النشاط؟', 'Delete activity?')),
+        content: Text(
+          _copy(
+            context,
+            'سيتم حذف "${activity['title']}" من قائمة الأنشطة.',
+            'This will delete "${activity['title']}" from the activities list.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: RafeeqColors.danger),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(_copy(context, 'حذف', 'Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.session.api.dio.delete('/activities/${activity['id']}');
+      refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_copy(context, 'تم حذف النشاط', 'Activity deleted')),
+        ));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.session.api.errorMessage(error))),
+        );
       }
     }
   }
@@ -629,6 +657,100 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
 
   static String _copy(BuildContext context, String ar, String en) =>
       Localizations.localeOf(context).languageCode == 'ar' ? ar : en;
+}
+
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({
+    required this.activity,
+    required this.duration,
+    required this.strings,
+    required this.onStart,
+    required this.onDelete,
+  });
+
+  final Map<String, dynamic> activity;
+  final int duration;
+  final AppLocalizations strings;
+  final VoidCallback onStart;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return RafeeqGlowCard(
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 8, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: RafeeqGradients.softCardFor(
+                Theme.of(context).brightness,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.psychology_alt_outlined),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activity['title'].toString(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${localizedActivityType(strings, activity['type'])} • ${strings.activityDuration(duration)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 108),
+            child: FilledButton.tonal(
+              onPressed: onStart,
+              child: FittedBox(child: Text(strings.start)),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: _ActivitiesPanelState._copy(context, 'خيارات', 'Options'),
+            onSelected: (value) {
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: RafeeqColors.danger,
+                  ),
+                  title: Text(
+                    _ActivitiesPanelState._copy(
+                      context,
+                      'حذف النشاط',
+                      'Delete activity',
+                    ),
+                    style: const TextStyle(color: RafeeqColors.danger),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PoemExerciseCard extends StatelessWidget {

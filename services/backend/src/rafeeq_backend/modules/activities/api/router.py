@@ -105,6 +105,16 @@ def complete_activity(log_id: str, user: CurrentUser, db: DbSession) -> Activity
     return ActivityLogResponse.model_validate(log)
 
 
+@router.delete("/activities/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_activity(activity_id: str, user: CurrentUser, db: DbSession) -> None:
+    activity = db.get(ActivityDefinition, activity_id)
+    if activity is None or activity.type == "poem_completion" or not activity.is_active:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    require_caregiver_access(db, user, activity.patient_id)
+    activity.is_active = False
+    db.commit()
+
+
 @router.get(
     "/patients/{patient_id}/activities/poems",
     response_model=list[SavedPoemResponse],
