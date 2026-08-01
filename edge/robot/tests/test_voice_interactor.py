@@ -7,7 +7,12 @@ from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.application.openai_voice_agent import OpenAIRealtimeVoiceAgent
 from rafeeq_robot.application.reminder_service import ReminderService
 from rafeeq_robot.application.voice_interactor import VoiceIntentRouter
-from rafeeq_robot.main import _extract_wake_command, _is_quiet_command, _language_switch_locale
+from rafeeq_robot.main import (
+    _extract_wake_command,
+    _is_actionable_followup,
+    _is_quiet_command,
+    _language_switch_locale,
+)
 from rafeeq_robot.persistence.database import RobotDatabase
 from rafeeq_robot.persistence.models import LocalEvent, LocalOccurrence, LocalRoutine
 
@@ -258,6 +263,43 @@ def test_openai_voice_agent_without_key_uses_local_fallback(tmp_path: Path) -> N
     assert speaker.messages[-1] == "Yes, Lunch is recorded as completed."
 
 
+def test_openai_add_routine_action_records_create_event(tmp_path: Path) -> None:
+    database = create_database(tmp_path)
+    speaker = FakeSpeaker()
+    outbox = OutboxService(database, DEVICE_ID, PATIENT_ID)
+    reminders = ReminderService(database, outbox, speaker)
+    local_router = VoiceIntentRouter(reminders, outbox, speaker)
+    agent = OpenAIRealtimeVoiceAgent(
+        local_router,
+        reminders,
+        speaker,
+        api_key="test",
+        model="gpt-realtime-2.1",
+        text_model="gpt-5.4",
+        reasoning_effort="low",
+    )
+
+    message = agent._execute_plan(
+        {
+            "action": "add_routine",
+            "routine": {
+                "title": "Dentist appointment",
+                "type": "appointment",
+                "time_24h": "20:00",
+            },
+        },
+        "add appointment dentist at 8 pm",
+        "test",
+        "en",
+    )
+
+    assert message == "Done. I added the task."
+    with database.session() as session:
+        events = list(session.scalars(select(LocalEvent).order_by(LocalEvent.sequence)).all())
+    assert [event.event_type for event in events] == ["voice_routine_create"]
+    assert events[0].payload_json["routine"]["title"] == "Dentist appointment"
+
+
 def test_voice_router_can_switch_preferred_locale_to_arabic(tmp_path: Path) -> None:
     database = create_database(tmp_path)
     outbox = OutboxService(database, DEVICE_ID, PATIENT_ID)
@@ -285,6 +327,14 @@ def test_paused_voice_can_resume_with_wake_word_only() -> None:
     assert _extract_wake_command("Rafeeq", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("يا رفيق", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("Rafeeq add task", "يا رفيق,rafeeq") == "add task"
+
+
+def test_voice_accepts_one_actionable_followup_after_wake_word() -> None:
+    assert _is_actionable_followup("appointment at eight o'clock in the evening")
+    assert _is_actionable_followup("add a task at 8 pm")
+    assert _is_actionable_followup("start poem test")
+    assert _is_actionable_followup("ابدأ اختبار القصيدة")
+    assert not _is_actionable_followup("they were alive")
 
 
 def test_voice_language_switch_commands() -> None:

@@ -218,6 +218,7 @@ def _start_daemon_voice_loop(
         external_pause_logged = False
         mic_reserved_logged = False
         pending_transcript: str | None = None
+        awaiting_wake_followup = False
         current_locale = settings.voice_default_locale if settings.voice_default_locale in {"ar", "en"} else "en"
         _set_voice_response_locale(voice, current_locale)
         while True:
@@ -261,6 +262,7 @@ def _start_daemon_voice_loop(
                         _set_terminal_voice_paused(True)
                         external_pause_logged = True
                         pending_transcript = None
+                        awaiting_wake_followup = False
                         print("Voice remains in quiet mode after repeated quiet command.")
                         time.sleep(0.5)
                         continue
@@ -269,6 +271,7 @@ def _start_daemon_voice_loop(
                     _set_terminal_voice_paused(False)
                     external_pause_logged = False
                     pending_transcript = None
+                    awaiting_wake_followup = False
                     if requested_locale is not None:
                         current_locale = requested_locale
                         _set_voice_response_locale(voice, current_locale)
@@ -291,6 +294,7 @@ def _start_daemon_voice_loop(
                             choose_locale_text(current_locale, "سمعتك.", "I heard you."),
                             current_locale,
                         )
+                        awaiting_wake_followup = True
                         print("Voice listening resumed by wake command.")
                         time.sleep(0.5)
                         continue
@@ -301,9 +305,17 @@ def _start_daemon_voice_loop(
             if settings.voice_wake_word_required:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
                 if wake_command is None:
-                    print("Voice transcript ignored: wake word was not heard.")
-                    time.sleep(0.5)
-                    continue
+                    if awaiting_wake_followup and _is_actionable_followup(transcript):
+                        awaiting_wake_followup = False
+                        print(
+                            "Voice follow-up accepted after wake word: "
+                            f"{format_console_text(transcript)}"
+                        )
+                    else:
+                        awaiting_wake_followup = False
+                        print("Voice transcript ignored: wake word was not heard.")
+                        time.sleep(0.5)
+                        continue
                 if wake_command is not None:
                     requested_locale = _language_switch_locale(wake_command or transcript)
                     if not wake_command:
@@ -311,8 +323,10 @@ def _start_daemon_voice_loop(
                             choose_locale_text(current_locale, "سمعتك.", "I heard you."),
                             current_locale,
                         )
+                        awaiting_wake_followup = True
                         time.sleep(0.5)
                         continue
+                    awaiting_wake_followup = False
                     transcript = wake_command
                     print(f"Wake command: {format_console_text(transcript)}")
             requested_locale = _language_switch_locale(transcript)
@@ -336,6 +350,7 @@ def _start_daemon_voice_loop(
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
                 pending_transcript = None
+                awaiting_wake_followup = False
                 print("Voice quiet mode enabled by command; waiting for wake word.")
                 time.sleep(0.5)
                 continue
@@ -344,6 +359,7 @@ def _start_daemon_voice_loop(
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
                 pending_transcript = None
+                awaiting_wake_followup = False
                 speaker.speak(
                     choose_locale_text(
                         current_locale,
@@ -461,6 +477,83 @@ def _is_voice_cancel(transcript: str) -> bool:
         "خلاص",
     )
     return any(_normalize_wake_text(phrase).replace(" ", "") in compact for phrase in phrases)
+
+
+def _is_actionable_followup(transcript: str) -> bool:
+    if _language_switch_locale(transcript) is not None:
+        return True
+    if (
+        _is_quiet_command(transcript)
+        or _is_stop_hearing_command(transcript)
+        or _is_start_hearing_command(transcript)
+    ):
+        return True
+    return _contains_control_phrase(
+        transcript,
+        (
+            "add task",
+            "add a task",
+            "create task",
+            "new task",
+            "task at",
+            "add appointment",
+            "create appointment",
+            "new appointment",
+            "appointment at",
+            "meeting at",
+            "add reminder",
+            "create reminder",
+            "new reminder",
+            "remind me",
+            "medicine",
+            "medication",
+            "water",
+            "meal",
+            "complete task",
+            "mark done",
+            "done task",
+            "start poem",
+            "poem test",
+            "poetry test",
+            "start album",
+            "album test",
+            "photo test",
+            "memory test",
+            "start activity",
+            "help",
+            "emergency",
+            "موعد",
+            "اجتماع",
+            "مهمه",
+            "مهمة",
+            "تذكير",
+            "ذكرني",
+            "دواء",
+            "علاج",
+            "مويه",
+            "ماء",
+            "وجبه",
+            "وجبة",
+            "غداء",
+            "عشاء",
+            "فطور",
+            "خلصت",
+            "سويت",
+            "ابدأ",
+            "ابدا",
+            "شغل",
+            "قصيده",
+            "قصيدة",
+            "البوم",
+            "ألبوم",
+            "صور",
+            "ذاكره",
+            "ذاكرة",
+            "مساعده",
+            "مساعدة",
+            "طوارئ",
+        ),
+    )
 
 
 def _set_voice_response_locale(

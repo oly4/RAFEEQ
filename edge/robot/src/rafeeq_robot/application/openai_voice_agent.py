@@ -370,7 +370,6 @@ class OpenAIRealtimeVoiceAgent:
             "open_routine",
             "open_dashboard",
             "open_settings",
-            "add_routine",
             "edit_routine",
             "delete_routine",
             "complete_routine",
@@ -379,15 +378,16 @@ class OpenAIRealtimeVoiceAgent:
             message = assistant_text or _default_action_text(action, locale)
             self._record_app_action(action, transcript, message)
             return message
-        if action in {"start_activity", "request_add_task", "request_edit_task", "request_delete_task"}:
+        if action in {"start_activity", "add_routine", "request_add_task", "request_edit_task", "request_delete_task"}:
             mapped_action = {
                 "start_activity": "open_activities",
+                "add_routine": "add_routine",
                 "request_add_task": "add_routine",
                 "request_edit_task": "edit_routine",
                 "request_delete_task": "delete_routine",
             }[action]
-            message = _default_action_text(mapped_action, locale)
-            if action == "request_add_task":
+            message = assistant_text or _default_action_text(mapped_action, locale)
+            if action in {"add_routine", "request_add_task"}:
                 routine = plan.get("routine")
                 if isinstance(routine, dict) and routine.get("title") and routine.get("time_24h"):
                     self._record_routine_create(transcript, message, routine)
