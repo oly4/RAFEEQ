@@ -48,6 +48,7 @@ class RobotSettings(BaseSettings):
     voice_confirm_before_response: bool = False
     voice_wake_word_required: bool = False
     voice_wake_words: str = "يا رفيق,يارفيق,رفيق,رافع,rafeeq,rafeeq"
+    voice_default_locale: str = "en"
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=(".env", ".env.robot"), extra="ignore")

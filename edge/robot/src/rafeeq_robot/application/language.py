@@ -8,9 +8,9 @@ def detect_spoken_locale(text: str) -> str:
 
     arabic_chars = len(re.findall(r"[\u0600-\u06FF]", text))
     latin_chars = len(re.findall(r"[A-Za-z]", text))
-    if latin_chars > arabic_chars:
-        return "en"
-    return "ar"
+    if arabic_chars > latin_chars:
+        return "ar"
+    return "en"
 
 
 def choose_locale_text(locale: str, arabic: str, english: str) -> str:

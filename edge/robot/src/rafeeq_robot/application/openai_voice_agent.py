@@ -42,9 +42,11 @@ class OpenAIRealtimeVoiceAgent:
         self.text_model = text_model
         self.reasoning_effort = reasoning_effort
         self.timeout_seconds = timeout_seconds
+        self.preferred_locale = "en"
+        self.fallback.set_preferred_locale(self.preferred_locale)
 
     def handle_text(self, transcript: str, source: str = "openai_realtime") -> VoiceResult:
-        locale = detect_spoken_locale(transcript)
+        locale = self.preferred_locale or detect_spoken_locale(transcript)
         if not self.api_key:
             print("OpenAI API key is not configured; using safety command router.")
             return self.fallback.handle_text(transcript, source)
@@ -78,6 +80,12 @@ class OpenAIRealtimeVoiceAgent:
         )
         return VoiceResult("openai_conversation", True, message)
 
+    def set_preferred_locale(self, locale: str) -> None:
+        if locale not in {"ar", "en"}:
+            return
+        self.preferred_locale = locale
+        self.fallback.set_preferred_locale(locale)
+
     def _ask_openai(self, transcript: str, locale: str) -> str:
         url = f"wss://api.openai.com/v1/realtime?model={self.model}"
         headers = {
@@ -101,7 +109,7 @@ class OpenAIRealtimeVoiceAgent:
             "instructions": _TEXT_PLANNER_INSTRUCTIONS,
             "input": (
                 f"User said: {transcript}\n\n"
-                f"Detected response language: {_locale_name(locale)}\n\n"
+                f"Selected response language: {_locale_name(locale)}\n\n"
                 "Current synced RAFEEQ tasks JSON:\n"
                 f"{json.dumps(task_context, ensure_ascii=False)}"
             ),
@@ -135,7 +143,7 @@ class OpenAIRealtimeVoiceAgent:
                     "session": {
                         "modalities": ["text"],
                         "instructions": _SYSTEM_INSTRUCTIONS
-                        + f"\nDetected response language for this turn: {_locale_name(locale)}.",
+                        + f"\nSelected response language for this turn: {_locale_name(locale)}.",
                         "tools": _TOOLS,
                         "tool_choice": "auto",
                     },
@@ -157,7 +165,7 @@ class OpenAIRealtimeVoiceAgent:
                                 "type": "input_text",
                                 "text": (
                                     f"User said: {transcript}\n\n"
-                                    f"Detected response language: {_locale_name(locale)}\n\n"
+                                    f"Selected response language: {_locale_name(locale)}\n\n"
                                     "Current synced RAFEEQ tasks JSON:\n"
                                     f"{json.dumps(task_context, ensure_ascii=False)}"
                                 ),
@@ -261,10 +269,10 @@ class OpenAIRealtimeVoiceAgent:
             return {"handled": True, "event_id": event_id}
         if name == "send_app_action":
             action = str(arguments.get("action") or "unknown")
-            locale = str(arguments.get("locale") or arguments.get("language") or "ar")
+            locale = str(arguments.get("locale") or arguments.get("language") or self.preferred_locale)
             provided_text = str(arguments.get("assistant_text") or "")
             if locale not in {"ar", "en"}:
-                locale = detect_spoken_locale(provided_text) if provided_text else "ar"
+                locale = detect_spoken_locale(provided_text) if provided_text else self.preferred_locale
             assistant_text = str(
                 provided_text or _default_action_text(action, locale)
             )
@@ -546,11 +554,10 @@ def _supports_reasoning_effort(model: str) -> bool:
 
 _SYSTEM_INSTRUCTIONS = """
 You are RAFEEQ, a calm elderly-care voice assistant.
-Understand both Arabic and English. Always answer in the same language as the
-patient's latest message: Arabic input gets short natural Saudi Najdi/Riyadh
-Arabic, and English input gets short clear English. If the message is mixed,
-use the dominant language. Be respectful, warm like family, and use neutral
-wording that works for any patient gender.
+Understand both Arabic and English. Always answer in the selected response
+language given for the current turn. English is the default. When Arabic is
+selected, use short natural Saudi Najdi/Riyadh Arabic. Be respectful, warm like
+family, and use neutral wording that works for any patient gender.
 You are not a doctor. Never diagnose, recommend doses, or change medication.
 For task, routine, meal, water, activity, or medication status questions, use the
 available tools instead of guessing. If records are missing, say that no synced
@@ -587,7 +594,7 @@ _TEXT_PLANNER_INSTRUCTIONS = (
     "title:string, time_24h:'HH:MM', description:string|null, medication:null or "
     "{medication_name:string,dosage_text:string,instructions:string|null}}. "
     "If the user says appointment, use type appointment. If they say task without a specific type, use custom. "
-    "Required JSON keys: action, assistant_text, query, minutes, routine. Keep assistant_text in the detected response language and do not claim success before "
+    "Required JSON keys: action, assistant_text, query, minutes, routine. Keep assistant_text in the selected response language and do not claim success before "
     "the robot executes the action."
 )
 

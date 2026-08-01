@@ -39,15 +39,17 @@ class VoiceIntentRouter:
         speaker: SpeakerAdapter,
         emergencies: EmergencyManager | None = None,
         snooze_minutes: int = 10,
+        preferred_locale: str = "en",
     ) -> None:
         self.reminders = reminders
         self.outbox = outbox
         self.speaker = speaker
         self.emergencies = emergencies
         self.snooze_minutes = snooze_minutes
+        self.preferred_locale = preferred_locale if preferred_locale in {"ar", "en"} else "en"
 
     def handle_text(self, transcript: str, source: str = "simulated_text") -> VoiceResult:
-        locale = detect_spoken_locale(transcript)
+        locale = self.preferred_locale or detect_spoken_locale(transcript)
         intent, confidence = self._classify(transcript)
         self.outbox.record(
             "voice_command_recognized",
@@ -85,6 +87,10 @@ class VoiceIntentRouter:
         )
         self.speaker.speak(message, locale)
         return VoiceResult(intent, False, message)
+
+    def set_preferred_locale(self, locale: str) -> None:
+        if locale in {"ar", "en"}:
+            self.preferred_locale = locale
 
     def _complete_latest_reminder(self, locale: str) -> VoiceResult:
         occurrence_id = self.reminders.latest_prompted_occurrence_id()

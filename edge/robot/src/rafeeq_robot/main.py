@@ -219,6 +219,8 @@ def _start_daemon_voice_loop(
         external_pause_logged = False
         mic_reserved_logged = False
         pending_transcript: str | None = None
+        current_locale = settings.voice_default_locale if settings.voice_default_locale in {"ar", "en"} else "en"
+        _set_voice_response_locale(voice, current_locale)
         while True:
             if _is_voice_mic_reserved():
                 if not mic_reserved_logged:
@@ -265,15 +267,29 @@ def _start_daemon_voice_loop(
                         print("Voice remains in quiet mode after repeated quiet command.")
                         time.sleep(0.5)
                         continue
-                    locale = detect_spoken_locale(wake_command or transcript)
+                    requested_locale = _language_switch_locale(wake_command or transcript)
                     voice_paused = False
                     _set_terminal_voice_paused(False)
                     external_pause_logged = False
                     pending_transcript = None
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
+                    if requested_locale is not None:
+                        current_locale = requested_locale
+                        _set_voice_response_locale(voice, current_locale)
+                        speaker.speak(
+                            choose_locale_text(
+                                current_locale,
+                                "تمام، بتكلم عربي.",
+                                "Okay. I will speak English.",
+                            ),
+                            current_locale,
+                        )
+                        print(f"Voice response language changed to {current_locale}.")
+                        time.sleep(0.5)
+                        continue
                     speaker.speak(
-                        choose_locale_text(locale, "سمعتك.", "I heard you."),
-                        locale,
+                        choose_locale_text(current_locale, "سمعتك.", "I heard you."),
+                        current_locale,
                     )
                     print("Voice listening resumed by wake command.")
                     if wake_command and not _is_start_hearing_command(wake_command):
@@ -294,27 +310,41 @@ def _start_daemon_voice_loop(
                     continue
                 if wake_command is not None:
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
-                    locale = detect_spoken_locale(wake_command or transcript)
+                    requested_locale = _language_switch_locale(wake_command or transcript)
                     if not wake_command:
                         speaker.speak(
-                            choose_locale_text(locale, "سمعتك.", "I heard you."),
-                            locale,
+                            choose_locale_text(current_locale, "سمعتك.", "I heard you."),
+                            current_locale,
                         )
                         time.sleep(0.5)
                         continue
                     transcript = wake_command
-                    if not _is_quiet_command(transcript):
+                    if not _is_quiet_command(transcript) and requested_locale is None:
                         speaker.speak(
-                            choose_locale_text(locale, "سمعتك.", "I heard you."),
-                            locale,
+                            choose_locale_text(current_locale, "سمعتك.", "I heard you."),
+                            current_locale,
                         )
                     print(f"Wake command: {format_console_text(transcript)}")
                 else:
                     awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     print("Voice transcript accepted during active wake session.")
+            requested_locale = _language_switch_locale(transcript)
+            if requested_locale is not None:
+                current_locale = requested_locale
+                _set_voice_response_locale(voice, current_locale)
+                speaker.speak(
+                    choose_locale_text(
+                        current_locale,
+                        "تمام، بتكلم عربي.",
+                        "Okay. I will speak English.",
+                    ),
+                    current_locale,
+                )
+                print(f"Voice response language changed to {current_locale}.")
+                time.sleep(0.5)
+                continue
             if _is_quiet_command(transcript):
-                locale = detect_spoken_locale(transcript)
-                speaker.speak(choose_locale_text(locale, "تمام.", "Okay."), locale)
+                speaker.speak(choose_locale_text(current_locale, "تمام.", "Okay."), current_locale)
                 voice_paused = True
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
@@ -324,7 +354,6 @@ def _start_daemon_voice_loop(
                 time.sleep(0.5)
                 continue
             if _is_stop_hearing_command(transcript):
-                locale = detect_spoken_locale(transcript)
                 voice_paused = True
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
@@ -332,18 +361,20 @@ def _start_daemon_voice_loop(
                 awake_until = 0.0
                 speaker.speak(
                     choose_locale_text(
-                        locale,
+                        current_locale,
                         "تم، وقفت سماع الأوامر. قل يا رفيق اسمعني عشان أرجع.",
                         "Done. I stopped listening for commands. Say Rafeeq start hearing to bring me back.",
                     ),
-                    locale,
+                    current_locale,
                 )
                 print("Voice listening paused by command.")
                 time.sleep(0.5)
                 continue
             if _is_start_hearing_command(transcript):
-                locale = detect_spoken_locale(transcript)
-                speaker.speak(choose_locale_text(locale, "أنا أسمعك.", "I am listening."), locale)
+                speaker.speak(
+                    choose_locale_text(current_locale, "أنا أسمعك.", "I am listening."),
+                    current_locale,
+                )
                 print("Voice start-hearing command received while already active.")
                 time.sleep(0.5)
                 continue
@@ -354,40 +385,41 @@ def _start_daemon_voice_loop(
                         pending_transcript = None
                         print(f"Voice confirmed transcript: {format_console_text(transcript)}")
                     elif _is_voice_cancel(transcript):
-                        locale = detect_spoken_locale(transcript)
                         print(f"Voice cancelled transcript: {format_console_text(pending_transcript)}")
                         pending_transcript = None
                         speaker.speak(
-                            choose_locale_text(locale, "تم، ألغيت الأمر.", "Done. I cancelled it."),
-                            locale,
+                            choose_locale_text(
+                                current_locale,
+                                "تم، ألغيت الأمر.",
+                                "Done. I cancelled it.",
+                            ),
+                            current_locale,
                         )
                         time.sleep(0.5)
                         continue
                     else:
-                        locale = detect_spoken_locale(transcript)
                         pending_transcript = transcript
                         print(f"Voice pending transcript updated: {format_console_text(transcript)}")
                         speaker.speak(
                             choose_locale_text(
-                                locale,
+                                current_locale,
                                 f"سمعت: {transcript}. قل تأكيد عشان أنفذ.",
                                 f"I heard: {transcript}. Say confirm so I can do it.",
                             ),
-                            locale,
+                            current_locale,
                         )
                         time.sleep(0.5)
                         continue
                 elif not _is_voice_confirmation(transcript):
-                    locale = detect_spoken_locale(transcript)
                     pending_transcript = transcript
                     print(f"Voice pending transcript: {format_console_text(transcript)}")
                     speaker.speak(
                         choose_locale_text(
-                            locale,
+                            current_locale,
                             f"سمعت: {transcript}. قل تأكيد عشان أنفذ.",
                             f"I heard: {transcript}. Say confirm so I can do it.",
                         ),
-                        locale,
+                        current_locale,
                     )
                     time.sleep(0.5)
                     continue
@@ -444,6 +476,71 @@ def _is_voice_cancel(transcript: str) -> bool:
         "خلاص",
     )
     return any(_normalize_wake_text(phrase).replace(" ", "") in compact for phrase in phrases)
+
+
+def _set_voice_response_locale(
+    voice: VoiceIntentRouter | OpenAIRealtimeVoiceAgent,
+    locale: str,
+) -> None:
+    set_locale = getattr(voice, "set_preferred_locale", None)
+    if callable(set_locale):
+        set_locale(locale)
+
+
+def _language_switch_locale(transcript: str) -> str | None:
+    if _contains_control_phrase(
+        transcript,
+        (
+            "speak arabic",
+            "talk arabic",
+            "talk in arabic",
+            "speak in arabic",
+            "answer arabic",
+            "answer in arabic",
+            "arabic language",
+            "change to arabic",
+            "switch to arabic",
+            "تكلم عربي",
+            "تكلم بالعربي",
+            "تحدث عربي",
+            "تحدث بالعربي",
+            "جاوب عربي",
+            "جاوب بالعربي",
+            "حول عربي",
+            "حول للعربي",
+            "اللغة العربية",
+            "اللغه العربيه",
+        ),
+    ):
+        return "ar"
+    if _contains_control_phrase(
+        transcript,
+        (
+            "speak english",
+            "talk english",
+            "talk in english",
+            "speak in english",
+            "answer english",
+            "answer in english",
+            "english language",
+            "change to english",
+            "switch to english",
+            "تكلم انجليزي",
+            "تكلم بالانجليزي",
+            "تكلم انقليزي",
+            "تكلم بالانقليزي",
+            "تحدث انجليزي",
+            "تحدث بالانجليزي",
+            "جاوب انجليزي",
+            "جاوب بالانجليزي",
+            "حول انجليزي",
+            "حول للانجليزي",
+            "اللغة الانجليزية",
+            "اللغه الانجليزيه",
+        ),
+    ):
+        return "en"
+    return None
 
 
 def _is_terminal_voice_paused() -> bool:

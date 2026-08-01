@@ -7,7 +7,7 @@ from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.application.openai_voice_agent import OpenAIRealtimeVoiceAgent
 from rafeeq_robot.application.reminder_service import ReminderService
 from rafeeq_robot.application.voice_interactor import VoiceIntentRouter
-from rafeeq_robot.main import _extract_wake_command, _is_quiet_command
+from rafeeq_robot.main import _extract_wake_command, _is_quiet_command, _language_switch_locale
 from rafeeq_robot.persistence.database import RobotDatabase
 from rafeeq_robot.persistence.models import LocalEvent, LocalOccurrence, LocalRoutine
 
@@ -175,7 +175,7 @@ def test_voice_answers_medication_status_out_loud(tmp_path: Path) -> None:
 
     assert result.intent == "medication_status_question"
     assert result.handled is True
-    assert speaker.messages[-1] == "نعم، لقد أخذت الدواء قبل نصف ساعة."
+    assert speaker.messages[-1] == "Yes, the medicine was taken about half an hour ago."
     with database.session() as session:
         events = list(session.scalars(select(LocalEvent).order_by(LocalEvent.sequence)).all())
     assert events[-1].payload_json["intent"] == "medication_status_question"
@@ -193,7 +193,7 @@ def test_voice_understands_natural_medicine_status_request(tmp_path: Path) -> No
 
     assert result.intent == "medication_status_question"
     assert result.handled is True
-    assert speaker.messages[-1] == "نعم، لقد أخذت الدواء قبل نصف ساعة."
+    assert speaker.messages[-1] == "Yes, the medicine was taken about half an hour ago."
 
 
 def test_voice_does_not_claim_medication_was_taken_without_record(tmp_path: Path) -> None:
@@ -205,7 +205,7 @@ def test_voice_does_not_claim_medication_was_taken_without_record(tmp_path: Path
 
     assert result.intent == "medication_status_question"
     assert result.handled is False
-    assert speaker.messages[-1] == "لا يوجد عندي تسجيل أن الدواء أُخذ بعد."
+    assert speaker.messages[-1] == "I do not have a record that the medicine was taken yet."
 
 
 def test_voice_answers_completed_app_task_status(tmp_path: Path) -> None:
@@ -218,7 +218,7 @@ def test_voice_answers_completed_app_task_status(tmp_path: Path) -> None:
 
     assert result.intent == "task_status_question"
     assert result.handled is True
-    assert speaker.messages[-1] == "نعم، تم تسجيل أن مهمة Lunch أُنجزت."
+    assert speaker.messages[-1] == "Yes, Lunch is recorded as completed."
 
 
 def test_voice_answers_pending_app_task_status(tmp_path: Path) -> None:
@@ -231,7 +231,7 @@ def test_voice_answers_pending_app_task_status(tmp_path: Path) -> None:
 
     assert result.intent == "task_status_question"
     assert result.handled is False
-    assert speaker.messages[-1] == "لا، مهمة Memory exercise لم تُسجل كمكتملة بعد."
+    assert speaker.messages[-1] == "No, Memory exercise is not recorded as completed yet."
 
 
 def test_openai_voice_agent_without_key_uses_local_fallback(tmp_path: Path) -> None:
@@ -247,13 +247,31 @@ def test_openai_voice_agent_without_key_uses_local_fallback(tmp_path: Path) -> N
         speaker,
         api_key="",
         model="gpt-realtime-2.1",
+        text_model="gpt-5.4",
+        reasoning_effort="low",
     )
 
     result = agent.handle_text("did I finish lunch or not")
 
     assert result.intent == "task_status_question"
     assert result.handled is True
-    assert speaker.messages[-1] == "نعم، تم تسجيل أن مهمة Lunch أُنجزت."
+    assert speaker.messages[-1] == "Yes, Lunch is recorded as completed."
+
+
+def test_voice_router_can_switch_preferred_locale_to_arabic(tmp_path: Path) -> None:
+    database = create_database(tmp_path)
+    outbox = OutboxService(database, DEVICE_ID, PATIENT_ID)
+    seed_completed_medication(database, outbox)
+    speaker = FakeSpeaker()
+    reminders = ReminderService(database, outbox, speaker)
+    router = VoiceIntentRouter(reminders, outbox, speaker)
+    router.set_preferred_locale("ar")
+
+    result = router.handle_text("did I take my medicine")
+
+    assert result.intent == "medication_status_question"
+    assert result.handled is True
+    assert speaker.messages[-1] == "نعم، لقد أخذت الدواء قبل نصف ساعة."
 
 
 def test_voice_quiet_command_understands_english_typos_and_arabic() -> None:
@@ -267,3 +285,10 @@ def test_paused_voice_can_resume_with_wake_word_only() -> None:
     assert _extract_wake_command("Rafeeq", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("يا رفيق", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("Rafeeq add task", "يا رفيق,rafeeq") == "add task"
+
+
+def test_voice_language_switch_commands() -> None:
+    assert _language_switch_locale("speak Arabic") == "ar"
+    assert _language_switch_locale("تكلم عربي") == "ar"
+    assert _language_switch_locale("speak English") == "en"
+    assert _language_switch_locale("تكلم انجليزي") == "en"
