@@ -82,7 +82,7 @@ class LaptopAlertSpeaker:
 
 
 class SilentSpeaker:
-    def speak(self, text: str, locale: str = "ar") -> None:
+    def speak(self, text: str, locale: str = "en") -> None:
         _safe_print(f"[{locale}] {text}")
 
 
@@ -218,7 +218,7 @@ class OpenAIFallSpeaker:
         self.settings = settings
         self.fallback = fallback
 
-    def speak(self, text: str, locale: str = "ar") -> None:
+    def speak(self, text: str, locale: str = "en") -> None:
         _safe_print(f"[{locale}] {text}")
         if not self.settings.openai_api_key:
             self.fallback.speak(text, locale)
@@ -247,16 +247,16 @@ class OpenAIFallSpeaker:
             _play_wav(response.content, self.settings.audio_output_device)
         except Exception as exc:
             _safe_print(f"OpenAI fall voice failed; using beep fallback: {exc}")
-            self.fallback.speak(text, "ar")
+            self.fallback.speak(text, "en")
 
 
 class EspeakFallSpeaker:
-    """Local Arabic TTS for Raspberry Pi fall prompts."""
+    """Local TTS fallback for Raspberry Pi fall prompts."""
 
     def __init__(self, output_device: str = "plughw:0,0") -> None:
         self.output_device = output_device
 
-    def speak(self, text: str, locale: str = "ar") -> None:
+    def speak(self, text: str, locale: str = "en") -> None:
         _safe_print(f"[{locale}] {text}")
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
             result = subprocess.run(
@@ -277,7 +277,7 @@ class EspeakFallSpeaker:
             )
             if result.returncode != 0:
                 reason = result.stderr.decode("utf-8", errors="replace").strip()
-                _safe_print(f"Arabic TTS generation failed: {reason}")
+                _safe_print(f"Fall TTS generation failed: {reason}")
                 return
             subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
 
@@ -321,7 +321,7 @@ def main() -> None:
         "--speaker",
         choices=("openai", "espeak", "beep"),
         default="espeak",
-        help="Use OpenAI TTS, local Arabic espeak-ng, or console/beep fallback.",
+        help="Use OpenAI TTS, local espeak-ng, or console/beep fallback.",
     )
     parser.add_argument(
         "--voice-verification",
@@ -362,8 +362,8 @@ def main() -> None:
         settings = RobotSettings()
         speaker = _create_fall_speaker(args.speaker, settings)
         speaker.speak(
-            "انتبهت إنك ممكن طحت. طمني، أنت بخير؟ قل أنا بخير أو ساعدني.",
-            "ar",
+            "Possible fall detected. Are you okay? After the beep, say: I'm fine, or help me.",
+            "en",
         )
         outcome = _listen_for_fall_response(settings, args.verification_timeout)
         _safe_print(f"Voice check outcome: {outcome}")
@@ -465,7 +465,7 @@ def _run(args: argparse.Namespace) -> None:
     emergencies = EmergencyManager(
         outbox,
         SilentSpeaker() if args.voice_verification else speaker,
-        locale="ar",
+        locale="en",
     )
     verification_deadline = 0.0
     voice_verification = {"active": False, "deadline": 0.0, "listening": False}
@@ -886,13 +886,13 @@ def _start_fall_voice_listener(
             _set_robot_voice_mic_reserved(True)
             _wait_for_capture_device(settings.vosk_input_device, timeout_seconds=20)
             speaker.speak(
-                "انتبهت إنك ممكن طحت. بعد الصوت قل: أنا بخير، أو ساعدني. You can say: I'm fine.",
-                "ar",
+                "Possible fall detected. Are you okay? After the beep, say: I'm fine, or help me.",
+                "en",
             )
             listen_seconds = max(seconds, settings.voice_listen_seconds, 8)
             state["deadline"] = time.monotonic() + listen_seconds
             state["listening"] = True
-            speaker.speak("تكلم الآن.", "ar")
+            speaker.speak("Speak now.", "en")
             outcome = _listen_for_fall_response(settings, listen_seconds)
             state["listening"] = False
             _set_robot_voice_mic_reserved(False)
@@ -902,9 +902,12 @@ def _start_fall_voice_listener(
                 emergencies.finish_fall_verification(outcome)
                 print(f"Voice verification recorded: {outcome.upper()}")
                 if outcome == "safe":
-                    speaker.speak("الحمد لله. ما راح أرسل تنبيه طارئ.", "ar")
+                    speaker.speak("Okay. I will not send an emergency alert.", "en")
                 else:
-                    speaker.speak("ما وصلني رد واضح، أرسلت تنبيه طارئ لأهلك.", "ar")
+                    speaker.speak(
+                        "I did not hear a clear safe response. I sent an emergency alert.",
+                        "en",
+                    )
                 outbox.publish_pending()
         finally:
             _set_robot_voice_mic_reserved(False)
