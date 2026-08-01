@@ -87,8 +87,6 @@ def main() -> None:
         if sync:
             scheduler.add_job(_synchronize_quietly, "interval", seconds=120, args=[sync], max_instances=1)
     scheduler.start()
-    if settings.startup_greeting_enabled:
-        speaker.speak("مرحبا انا رفيق")
     print(f"RAFEEQ robot started (hardware_mode={settings.hardware_mode})")
     print(
         "Commands: sync, due, complete <id>, demo-med-taken, listen, voice <text>, "
@@ -112,6 +110,7 @@ def main() -> None:
         if voice_input is not None:
             _start_daemon_voice_loop(voice, voice_input, settings, speaker, poems, memories)
         print("Daemon mode active.")
+        _speak_startup_greeting(settings, speaker, voice_input is not None)
         try:
             while True:
                 time.sleep(3600)
@@ -121,6 +120,7 @@ def main() -> None:
             if client:
                 client.close()
         return
+    _speak_startup_greeting(settings, speaker, voice_input is not None)
     try:
         _command_loop(
             sync,
@@ -195,6 +195,37 @@ def _synchronize_quietly(sync: SyncService) -> None:
         print(f"Configuration sync complete: {version}")
     except Exception as exc:
         print(f"Configuration sync skipped; local voice remains active: {exc}")
+
+
+def _speak_startup_greeting(
+    settings: RobotSettings,
+    speaker: SpeakerAdapter,
+    voice_ready: bool,
+) -> None:
+    if not settings.startup_greeting_enabled:
+        return
+    locale = (
+        settings.voice_default_locale
+        if settings.voice_default_locale in {"ar", "en"}
+        else "en"
+    )
+    message = choose_locale_text(
+        locale,
+        "مرحبا، أنا رفيق. أنا جاهز أساعدك.",
+        "Hello, I'm RAFEEQ. I'm ready to help.",
+    )
+    if not voice_ready:
+        message = choose_locale_text(
+            locale,
+            "مرحبا، أنا رفيق. النظام جاهز، لكن الميكروفون غير مفعل الآن.",
+            "Hello, I'm RAFEEQ. The system is ready, but the microphone is not "
+            "active right now.",
+        )
+    try:
+        speaker.speak(message, locale)
+        print("Startup greeting spoken.")
+    except Exception as exc:
+        print(f"Startup greeting skipped: {exc}")
 
 
 def _close_sos_button(button: object | None) -> None:
