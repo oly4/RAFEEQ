@@ -11,7 +11,9 @@ from rafeeq_robot.main import (
     _extract_wake_command,
     _is_followup_candidate,
     _is_actionable_followup,
+    _is_explicit_activity_test_request,
     _is_quiet_command,
+    _is_vague_test_request,
     _language_switch_locale,
     _local_app_action,
 )
@@ -330,6 +332,7 @@ def test_paused_voice_can_resume_with_wake_word_only() -> None:
     assert _extract_wake_command("يا رفيق", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("توفيق، ابدأ اختبار الذاكرة", "يا رفيق,rafeeq") == "ابدأ اختبار الذاكره"
     assert _extract_wake_command("حفيق؟", "يا رفيق,rafeeq") == ""
+    assert _extract_wake_command("Hafik", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("Rafiq?", "يا رفيق,rafeeq") == ""
     assert _extract_wake_command("Rafeeq add task", "يا رفيق,rafeeq") == "add task"
     assert _extract_wake_command("Rafeeq, start memory test", "يا رفيق,rafeeq") == "start memory test"
@@ -354,6 +357,16 @@ def test_local_app_actions_handle_simple_navigation_commands() -> None:
     assert _local_app_action("افتح الروتين") == "open_routine"
     assert _local_app_action("start memory test") is None
     assert _local_app_action("add appointment at 7") is None
+
+
+def test_activity_test_requests_can_be_handled_after_missed_wake_word() -> None:
+    assert _is_explicit_activity_test_request("Start memory test.")
+    assert _is_explicit_activity_test_request("تفتح اختبار الذاكرة لعبدول")
+    assert _is_explicit_activity_test_request("start album test")
+    assert _is_explicit_activity_test_request("ابدأ اختبار القصيدة")
+    assert not _is_explicit_activity_test_request("test")
+    assert _is_vague_test_request("test")
+    assert _is_vague_test_request("تست")
 
 
 def test_voice_language_switch_commands() -> None:

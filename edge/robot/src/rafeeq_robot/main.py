@@ -338,7 +338,13 @@ def _start_daemon_voice_loop(
             if settings.voice_wake_word_required:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
                 if wake_command is None:
-                    if awaiting_wake_followup and _is_followup_candidate(transcript):
+                    if _is_explicit_activity_test_request(transcript):
+                        awaiting_wake_followup = False
+                        print(
+                            "Voice activity request accepted without wake word: "
+                            f"{format_console_text(transcript)}"
+                        )
+                    elif awaiting_wake_followup and _is_followup_candidate(transcript):
                         awaiting_wake_followup = False
                         print(
                             "Voice follow-up accepted after wake word: "
@@ -458,6 +464,19 @@ def _start_daemon_voice_loop(
                     time.sleep(0.5)
                     continue
             try:
+                if _is_vague_test_request(transcript):
+                    speaker.speak(
+                        choose_locale_text(
+                            current_locale,
+                            "أي اختبار تريد؟ قل اختبار الذاكرة أو اختبار القصيدة.",
+                            "Which test do you want? Say memory test or poem test.",
+                        ),
+                        current_locale,
+                    )
+                    awaiting_wake_followup = True
+                    print("Voice intent: clarify_activity_test; handled=True")
+                    time.sleep(0.5)
+                    continue
                 activity_request = _looks_like_activity_test(transcript)
                 if activity_request:
                     if poems.can_handle(transcript) and poems.handle_text(transcript, voice_input):
@@ -755,6 +774,81 @@ def _looks_like_activity_test(transcript: str) -> bool:
     )
 
 
+def _is_explicit_activity_test_request(transcript: str) -> bool:
+    if _is_vague_test_request(transcript):
+        return False
+    normalized = _normalize_wake_text(transcript)
+    has_test_word = _contains_control_phrase(
+        normalized,
+        (
+            "test",
+            "practice",
+            "quiz",
+            "اختبار",
+            "تمرين",
+            "اختبرني",
+            "دربني",
+        ),
+    )
+    has_memory_word = _contains_control_phrase(
+        normalized,
+        (
+            "memory",
+            "album",
+            "photo",
+            "picture",
+            "memories",
+            "الذاكره",
+            "الذاكرة",
+            "الالبوم",
+            "الألبوم",
+            "البوم",
+            "ألبوم",
+            "الصور",
+            "صوره",
+            "صورة",
+        ),
+    )
+    has_poem_word = _contains_control_phrase(
+        normalized,
+        (
+            "poem",
+            "poetry",
+            "قصيده",
+            "قصيدة",
+        ),
+    )
+    has_start_word = _contains_control_phrase(
+        normalized,
+        (
+            "start",
+            "begin",
+            "run",
+            "open",
+            "ابدأ",
+            "ابدا",
+            "افتح",
+            "شغل",
+        ),
+    )
+    return has_test_word and (has_memory_word or has_poem_word or has_start_word)
+
+
+def _is_vague_test_request(transcript: str) -> bool:
+    normalized = _normalize_wake_text(transcript)
+    compact = normalized.replace(" ", "")
+    vague = {
+        "test",
+        "tests",
+        "testing",
+        "تست",
+        "اختبار",
+        "الاختبار",
+        "تمرين",
+    }
+    return compact in vague
+
+
 def _looks_like_create_or_edit(transcript: str) -> bool:
     return _contains_control_phrase(
         transcript,
@@ -1002,6 +1096,8 @@ def _extract_wake_command(transcript: str, wake_words: str) -> str | None:
             "rafique",
             "rafig",
             "ofeig",
+            "hafik",
+            "hafeek",
             "dovek",
             "dovik",
             "dofek",
