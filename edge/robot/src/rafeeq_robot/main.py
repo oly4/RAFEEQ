@@ -109,7 +109,7 @@ def main() -> None:
             except Exception as exc:
                 print(f"Initial synchronization failed; local behavior remains active: {exc}")
         if voice_input is not None:
-            _start_daemon_voice_loop(voice, voice_input, settings, speaker, poems, memories)
+            _start_daemon_voice_loop(voice, voice_input, settings, speaker, outbox, poems, memories)
         print("Daemon mode active.")
         _speak_startup_greeting(settings, speaker, voice_input is not None)
         try:
@@ -240,6 +240,7 @@ def _start_daemon_voice_loop(
     voice_input: VoiceInputAdapter,
     settings: RobotSettings,
     speaker: SpeakerAdapter,
+    outbox: OutboxService,
     poems: PoemPracticeService,
     memories: MemoryPracticeService,
 ) -> None:
@@ -337,7 +338,7 @@ def _start_daemon_voice_loop(
             if settings.voice_wake_word_required:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
                 if wake_command is None:
-                    if awaiting_wake_followup and _is_actionable_followup(transcript):
+                    if awaiting_wake_followup and _is_followup_candidate(transcript):
                         awaiting_wake_followup = False
                         print(
                             "Voice follow-up accepted after wake word: "
@@ -457,12 +458,17 @@ def _start_daemon_voice_loop(
                     time.sleep(0.5)
                     continue
             try:
-                if poems.can_handle(transcript) and poems.handle_text(transcript, voice_input):
-                    print("Voice intent: start_poem_test; handled=True")
-                    time.sleep(0.5)
-                    continue
-                if memories.can_handle(transcript) and memories.handle_text(transcript, voice_input):
-                    print("Voice intent: start_photo_test; handled=True")
+                activity_request = _looks_like_activity_test(transcript)
+                if activity_request:
+                    if poems.can_handle(transcript) and poems.handle_text(transcript, voice_input):
+                        print("Voice intent: start_poem_test; handled=True")
+                        time.sleep(0.5)
+                        continue
+                    if memories.can_handle(transcript) and memories.handle_text(transcript, voice_input):
+                        print("Voice intent: start_photo_test; handled=True")
+                        time.sleep(0.5)
+                        continue
+                if _handle_local_app_command(transcript, outbox, speaker, current_locale):
                     time.sleep(0.5)
                     continue
                 result = voice.handle_text(
@@ -509,6 +515,11 @@ def _is_voice_cancel(transcript: str) -> bool:
         "خلاص",
     )
     return any(_normalize_wake_text(phrase).replace(" ", "") in compact for phrase in phrases)
+
+
+def _is_followup_candidate(transcript: str) -> bool:
+    normalized = _normalize_wake_text(transcript)
+    return bool(re.search(r"[0-9a-z\u0600-\u06ff]", normalized))
 
 
 def _is_actionable_followup(transcript: str) -> bool:
@@ -586,6 +597,215 @@ def _is_actionable_followup(transcript: str) -> bool:
             "طوارئ",
         ),
     )
+
+
+def _handle_local_app_command(
+    transcript: str,
+    outbox: OutboxService,
+    speaker: SpeakerAdapter,
+    locale: str,
+) -> bool:
+    action = _local_app_action(transcript)
+    if action is None:
+        return False
+    message = _local_app_action_message(action, locale)
+    outbox.record(
+        "voice_app_action",
+        {
+            "action": action,
+            "transcript": transcript,
+            "assistant_text": message,
+            "used_openai": False,
+        },
+    )
+    speaker.speak(message, locale)
+    print(f"Voice intent: {action}; handled=True")
+    return True
+
+
+def _local_app_action(transcript: str) -> str | None:
+    if _looks_like_activity_test(transcript) or _looks_like_create_or_edit(transcript):
+        return None
+    if _contains_control_phrase(
+        transcript,
+        (
+            "open album",
+            "show album",
+            "open photo",
+            "open photos",
+            "show photos",
+            "open pictures",
+            "show pictures",
+            "open memories",
+            "show memories",
+            "album",
+            "photo album",
+            "افتح الالبوم",
+            "افتح الألبوم",
+            "افتح الصور",
+            "وريني الصور",
+            "اعرض الصور",
+            "افتح الذكريات",
+            "الالبوم",
+            "الألبوم",
+        ),
+    ):
+        return "open_album"
+    if _contains_control_phrase(
+        transcript,
+        (
+            "open routine",
+            "show routine",
+            "open schedule",
+            "show schedule",
+            "open tasks",
+            "show tasks",
+            "routine",
+            "routin",
+            "routun",
+            "rotun",
+            "routune",
+            "schedule",
+            "افتح الروتين",
+            "افتح الجدول",
+            "افتح المهام",
+            "اعرض الروتين",
+            "اعرض الجدول",
+            "الروتين",
+            "الجدول",
+            "المهام",
+        ),
+    ):
+        return "open_routine"
+    if _contains_control_phrase(
+        transcript,
+        (
+            "open activities",
+            "show activities",
+            "activities",
+            "activity",
+            "افتح الانشطه",
+            "افتح الأنشطة",
+            "اعرض الانشطه",
+            "اعرض الأنشطة",
+            "الانشطه",
+            "الأنشطة",
+        ),
+    ):
+        return "open_activities"
+    if _contains_control_phrase(
+        transcript,
+        (
+            "open dashboard",
+            "show dashboard",
+            "dashboard",
+            "home page",
+            "افتح الرئيسيه",
+            "افتح الرئيسية",
+            "افتح لوحه التحكم",
+            "افتح لوحة التحكم",
+        ),
+    ):
+        return "open_dashboard"
+    if _contains_control_phrase(
+        transcript,
+        (
+            "open settings",
+            "settings",
+            "افتح الاعدادات",
+            "افتح الإعدادات",
+            "الاعدادات",
+            "الإعدادات",
+        ),
+    ):
+        return "open_settings"
+    return None
+
+
+def _looks_like_activity_test(transcript: str) -> bool:
+    return _contains_control_phrase(
+        transcript,
+        (
+            "test",
+            "practice",
+            "quiz",
+            "start memory",
+            "start album",
+            "start photo",
+            "start picture",
+            "start poem",
+            "begin memory",
+            "begin album",
+            "begin photo",
+            "اختبار",
+            "تمرين",
+            "اختبرني",
+            "دربني",
+            "ابدأ الالبوم",
+            "ابدا الالبوم",
+            "ابدأ الألبوم",
+            "ابدا الألبوم",
+            "ابدأ الصور",
+            "ابدا الصور",
+            "ابدأ الذاكره",
+            "ابدا الذاكره",
+            "ابدأ الذاكرة",
+            "ابدا الذاكرة",
+        ),
+    )
+
+
+def _looks_like_create_or_edit(transcript: str) -> bool:
+    return _contains_control_phrase(
+        transcript,
+        (
+            "add",
+            "create",
+            "new",
+            "delete",
+            "edit",
+            "change",
+            "remind me",
+            "complete",
+            "done",
+            "اضف",
+            "أضف",
+            "ضيف",
+            "سوي",
+            "احذف",
+            "عدل",
+            "غير",
+            "ذكرني",
+            "خلصت",
+        ),
+    )
+
+
+def _local_app_action_message(action: str, locale: str) -> str:
+    messages = {
+        "open_album": (
+            "تمام، فتحت الألبوم.",
+            "Okay. I opened the album.",
+        ),
+        "open_routine": (
+            "تمام، فتحت الروتين.",
+            "Okay. I opened the routine.",
+        ),
+        "open_activities": (
+            "تمام، فتحت الأنشطة.",
+            "Okay. I opened activities.",
+        ),
+        "open_dashboard": (
+            "تمام، فتحت الصفحة الرئيسية.",
+            "Okay. I opened the dashboard.",
+        ),
+        "open_settings": (
+            "تمام، فتحت الإعدادات.",
+            "Okay. I opened settings.",
+        ),
+    }
+    arabic, english = messages[action]
+    return choose_locale_text(locale, arabic, english)
 
 
 def _set_voice_response_locale(
@@ -770,12 +990,18 @@ def _extract_wake_command(transcript: str, wake_words: str) -> str | None:
             "رفيك",
             "رافيق",
             "رفيقو",
+            "توفيق",
+            "حفيق",
+            "خفيق",
+            "وفيق",
             "rafeeq",
             "rafeek",
+            "rafeq",
             "rafiq",
             "rafik",
             "rafique",
             "rafig",
+            "ofeig",
             "dovek",
             "dovik",
             "dofek",
