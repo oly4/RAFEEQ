@@ -214,7 +214,6 @@ def _start_daemon_voice_loop(
     def worker() -> None:
         description = getattr(voice_input, "description", "configured microphone")
         print(f"Daemon voice loop active: {description}")
-        awake_until = 0.0
         voice_paused = False
         external_pause_logged = False
         mic_reserved_logged = False
@@ -248,7 +247,6 @@ def _start_daemon_voice_loop(
                 time.sleep(0.5)
                 continue
             print(f"Voice transcript: {format_console_text(transcript)}")
-            now = time.monotonic()
             external_paused = _is_terminal_voice_paused()
             if external_paused and not external_pause_logged:
                 print("Voice paused by terminal command.")
@@ -263,7 +261,6 @@ def _start_daemon_voice_loop(
                         _set_terminal_voice_paused(True)
                         external_pause_logged = True
                         pending_transcript = None
-                        awake_until = 0.0
                         print("Voice remains in quiet mode after repeated quiet command.")
                         time.sleep(0.5)
                         continue
@@ -272,7 +269,6 @@ def _start_daemon_voice_loop(
                     _set_terminal_voice_paused(False)
                     external_pause_logged = False
                     pending_transcript = None
-                    awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     if requested_locale is not None:
                         current_locale = requested_locale
                         _set_voice_response_locale(voice, current_locale)
@@ -287,15 +283,15 @@ def _start_daemon_voice_loop(
                         print(f"Voice response language changed to {current_locale}.")
                         time.sleep(0.5)
                         continue
-                    speaker.speak(
-                        choose_locale_text(current_locale, "سمعتك.", "I heard you."),
-                        current_locale,
-                    )
-                    print("Voice listening resumed by wake command.")
                     if wake_command and not _is_start_hearing_command(wake_command):
                         transcript = wake_command
                         print(f"Wake command after quiet mode: {format_console_text(transcript)}")
                     else:
+                        speaker.speak(
+                            choose_locale_text(current_locale, "سمعتك.", "I heard you."),
+                            current_locale,
+                        )
+                        print("Voice listening resumed by wake command.")
                         time.sleep(0.5)
                         continue
                 else:
@@ -304,12 +300,11 @@ def _start_daemon_voice_loop(
                     continue
             if settings.voice_wake_word_required:
                 wake_command = _extract_wake_command(transcript, settings.voice_wake_words)
-                if wake_command is None and now >= awake_until:
+                if wake_command is None:
                     print("Voice transcript ignored: wake word was not heard.")
                     time.sleep(0.5)
                     continue
                 if wake_command is not None:
-                    awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
                     requested_locale = _language_switch_locale(wake_command or transcript)
                     if not wake_command:
                         speaker.speak(
@@ -319,15 +314,7 @@ def _start_daemon_voice_loop(
                         time.sleep(0.5)
                         continue
                     transcript = wake_command
-                    if not _is_quiet_command(transcript) and requested_locale is None:
-                        speaker.speak(
-                            choose_locale_text(current_locale, "سمعتك.", "I heard you."),
-                            current_locale,
-                        )
                     print(f"Wake command: {format_console_text(transcript)}")
-                else:
-                    awake_until = now + max(10, min(settings.voice_max_session_seconds, 120))
-                    print("Voice transcript accepted during active wake session.")
             requested_locale = _language_switch_locale(transcript)
             if requested_locale is not None:
                 current_locale = requested_locale
@@ -349,7 +336,6 @@ def _start_daemon_voice_loop(
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
                 pending_transcript = None
-                awake_until = 0.0
                 print("Voice quiet mode enabled by command; waiting for wake word.")
                 time.sleep(0.5)
                 continue
@@ -358,7 +344,6 @@ def _start_daemon_voice_loop(
                 _set_terminal_voice_paused(True)
                 external_pause_logged = True
                 pending_transcript = None
-                awake_until = 0.0
                 speaker.speak(
                     choose_locale_text(
                         current_locale,
