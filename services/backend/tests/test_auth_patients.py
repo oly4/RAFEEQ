@@ -377,8 +377,8 @@ def test_activities_memories_and_report_metrics() -> None:
     assert memory_list.status_code == 200, memory_list.text
     assert memory_list.json()["items"] == []
     report = client.get(f"/api/v1/patients/{patient_id}/reports/summary", headers=headers)
-    assert report.json()["memory_activities_completed"] == 1
-    assert report.json()["total_activity_sessions"] == 1
+    assert report.json()["memory_activities_completed"] == 0
+    assert report.json()["total_activity_sessions"] == 0
     weekly = client.get(
         f"/api/v1/patients/{patient_id}/reports/summary?period=week",
         headers=headers,

@@ -6,8 +6,6 @@ from sqlalchemy import select
 from fastapi import APIRouter
 
 from rafeeq_backend.models import (
-    ActivityDefinition,
-    ActivityLog,
     Device,
     EmergencyEvent,
     Routine,
@@ -18,6 +16,8 @@ from rafeeq_backend.modules.patients.application.policies import require_patient
 from rafeeq_backend.modules.reports.domain.schemas import ReportSummary
 
 router = APIRouter(tags=["reports"])
+
+REPORT_ROUTINE_TYPES = {"medication", "meal", "water", "appointment", "custom"}
 
 
 @router.get("/patients/{patient_id}/reports/summary", response_model=ReportSummary)
@@ -40,7 +40,19 @@ def report_summary(
         occurrence_statement = occurrence_statement.where(
             RoutineOccurrence.scheduled_at_utc >= range_start_at
         )
-    occurrences = list(db.scalars(occurrence_statement).all())
+    report_routine_ids = set(
+        db.scalars(
+            select(Routine.id).where(
+                Routine.patient_id == patient_id,
+                Routine.type.in_(REPORT_ROUTINE_TYPES),
+            )
+        ).all()
+    )
+    occurrences = [
+        item
+        for item in db.scalars(occurrence_statement).all()
+        if item.routine_id in report_routine_ids
+    ]
     completed = [item for item in occurrences if item.status == "completed"]
     medication_ids = set(
         db.scalars(
@@ -50,24 +62,9 @@ def report_summary(
     medication = [item for item in occurrences if item.routine_id in medication_ids]
     medication_completed = [item for item in medication if item.status == "completed"]
     missed_medication = [item for item in medication if item.status in ("missed", "skipped")]
-    activity_statement = select(ActivityLog).where(
-        ActivityLog.patient_id == patient_id, ActivityLog.status == "completed"
-    )
-    if range_start_at is not None:
-        activity_statement = activity_statement.where(ActivityLog.started_at >= range_start_at)
-    activity_logs = list(db.scalars(activity_statement).all())
-    activity_rows = db.execute(
-        select(ActivityDefinition.id, ActivityDefinition.type).where(
-            ActivityDefinition.patient_id == patient_id
-        )
-    ).all()
-    activity_types: dict[str, str] = {row[0]: row[1] for row in activity_rows}
-    memory_completed = len(
-        [log for log in activity_logs if activity_types.get(log.activity_id) == "memory_exercise"]
-    )
-    conversations = len(
-        [log for log in activity_logs if activity_types.get(log.activity_id) == "conversation"]
-    )
+    memory_completed = 0
+    activity_sessions = 0
+    conversations = 0
     emergency_statement = select(EmergencyEvent).where(EmergencyEvent.patient_id == patient_id)
     if range_start_at is not None:
         emergency_statement = emergency_statement.where(
@@ -100,16 +97,7 @@ def report_summary(
             if bucket_medication
             else 0
         )
-        memory_trend.append(
-            len(
-                [
-                    log
-                    for log in activity_logs
-                    if activity_types.get(log.activity_id) == "memory_exercise"
-                    and bucket_start <= log.started_at.replace(tzinfo=timezone.utc) < bucket_end
-                ]
-            )
-        )
+        memory_trend.append(0)
 
     return ReportSummary(
         period=period,
@@ -123,7 +111,7 @@ def report_summary(
         else 0,
         missed_medication_count=len(missed_medication),
         memory_activities_completed=memory_completed,
-        total_activity_sessions=len(activity_logs),
+        total_activity_sessions=activity_sessions,
         conversation_interactions=conversations,
         emergency_count=len(emergencies),
         average_emergency_acknowledgment_seconds=(
