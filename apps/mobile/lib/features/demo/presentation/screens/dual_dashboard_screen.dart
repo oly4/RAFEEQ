@@ -179,7 +179,11 @@ class _DemoPhone extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: RafeeqGradients.pageFor(brightness),
                 ),
-                child: child,
+                child: Navigator(
+                  onGenerateRoute: (_) => MaterialPageRoute<void>(
+                    builder: (_) => child,
+                  ),
+                ),
               ),
             ),
           ),
