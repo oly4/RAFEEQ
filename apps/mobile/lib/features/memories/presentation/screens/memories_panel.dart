@@ -27,6 +27,7 @@ class MemoriesPanel extends StatefulWidget {
 
 class _MemoriesPanelState extends State<MemoriesPanel> {
   late Future<Map<String, List<Map<String, dynamic>>>> future;
+  Map<String, List<Map<String, dynamic>>>? _cachedData;
   bool _photoTestAutoStarted = false;
 
   @override
@@ -57,15 +58,21 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
 
   Future<Map<String, List<Map<String, dynamic>>>> _load() async {
     final id = widget.session.currentPatient!.id;
-    final categories = await widget.session.api.dio
-        .get<List<dynamic>>('/patients/$id/memory-categories');
-    final memories = await widget.session.api.dio
-        .get<Map<String, dynamic>>('/patients/$id/memories');
-    return {
+    final responses = await Future.wait<dynamic>([
+      widget.session.api.dio
+          .get<List<dynamic>>('/patients/$id/memory-categories'),
+      widget.session.api.dio
+          .get<Map<String, dynamic>>('/patients/$id/memories'),
+    ]);
+    final categories = responses[0] as dynamic;
+    final memories = responses[1] as dynamic;
+    final data = <String, List<Map<String, dynamic>>>{
       'categories': categories.data!.cast<Map<String, dynamic>>(),
       'memories':
           (memories.data!['items'] as List).cast<Map<String, dynamic>>(),
     };
+    _cachedData = data;
+    return data;
   }
 
   void refresh() => setState(() => future = _load());
@@ -96,11 +103,12 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
     final content = FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
       future: future,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        final data = snapshot.data ?? _cachedData;
+        if (data == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        final categories = snapshot.data!['categories']!;
-        final memories = snapshot.data!['memories']!;
+        final categories = data['categories']!;
+        final memories = data['memories']!;
         final photoMemories =
             memories.where((memory) => _imageUrl(memory) != null).toList();
         final body = ListView(
