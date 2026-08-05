@@ -61,7 +61,7 @@ def main() -> None:
             email_verified_at=utc_now(),
         )
         patient = Patient(
-            display_name="أمينة التجريبية",
+            display_name="أم نوره",
             preferred_language="ar",
             timezone="Europe/London",
             condition_notes="Placeholder demo profile; contains no real patient data.",
