@@ -120,7 +120,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
               title: strings.memorySupportSubtitle,
               subtitle: _copy(
                 context,
-                'ارفع صور العائلة والذكريات، ثم اختبر المريض بطريقة لطيفة مع تلميحات عند الحاجة.',
+                'ارفع صور العائلة والذكريات، وخل رفيق يعرضها للمريض ويقرأ وصفها بهدوء بدون اختبار.',
                 'Upload family photos and memories, then let Rafeeq show them gently without testing or scoring.',
               ),
             ),
@@ -179,8 +179,8 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
                     Text(
                       _copy(
                         context,
-                        'ابدأ برفع صورة لشخص يعرفه المريض، واكتب الاسم والتلميح.',
-                        'Start by uploading a photo of someone the patient knows, then add the name and hint.',
+                        'ابدأ برفع صورة لشخص أو مكان يعرفه المريض، واكتب الوصف اللي يقرأه رفيق.',
+                        'Start by uploading a photo of someone or somewhere the patient knows, then add what Rafeeq should read.',
                       ),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium,
@@ -370,10 +370,12 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
               TextField(
                 controller: hint,
                 decoration: InputDecoration(
-                  labelText:
-                      _copy(context, 'تلميح للمريض', 'Hint for the patient'),
-                  hintText: _copy(context, 'مثال: هذي بنتك اللي تزورك كل جمعة',
-                      'Example: This is your daughter who visits every Friday'),
+                  labelText: _copy(
+                      context, 'وصف رفيق للصورة', 'Rafeeq photo description'),
+                  hintText: _copy(
+                      context,
+                      'مثال: هذا ابنك أحمد، كان يزورك كل جمعة.',
+                      'Example: This is your son Ahmed. He used to visit every Friday.'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -504,8 +506,8 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
               TextField(
                 controller: hint,
                 decoration: InputDecoration(
-                  labelText:
-                      _copy(context, 'تلميح للمريض', 'Hint for the patient'),
+                  labelText: _copy(
+                      context, 'وصف رفيق للصورة', 'Rafeeq photo description'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1353,7 +1355,7 @@ class _MemoryPhotoCard extends StatelessWidget {
                 if (prompt != null && prompt.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
-                    isArabic ? 'التلميح: $prompt' : 'Hint: $prompt',
+                    isArabic ? 'وصف رفيق: $prompt' : 'Rafeeq reads: $prompt',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
