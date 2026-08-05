@@ -81,9 +81,9 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
     final data = await future;
     if (!mounted) return;
     final memories = data['memories']!;
-    final photo =
-        memories.where((memory) => _imageUrl(memory) != null).firstOrNull;
-    if (photo == null) {
+    final photoMemories =
+        memories.where((memory) => _imageUrl(memory) != null).toList();
+    if (photoMemories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_copy(
@@ -94,7 +94,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
       );
       return;
     }
-    await _openMemoryTest(photo);
+    await _openMemorySlideshow(photoMemories);
   }
 
   @override
@@ -189,18 +189,46 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
                 ),
               )
             else
-              ...photoMemories.map(
-                (memory) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _MemoryPhotoCard(
-                    memory: memory,
-                    imageUrl: _imageUrl(memory)!,
-                    labels: _labels(memory),
-                    onTest: () => _openMemoryTest(memory),
-                    onEdit: () => _editMemory(memory, categories),
-                    onDelete: () => _deleteMemory(memory),
+              Column(
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _openMemorySlideshow(photoMemories),
+                    icon: const Icon(Icons.play_circle_outline_rounded),
+                    label: Text(
+                      _copy(context, 'ابدأ جولة الذكريات', 'Start memory tour'),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: photoMemories.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.78,
+                    ),
+                    itemBuilder: (context, index) {
+                      final memory = photoMemories[index];
+                      return _MemoryPhotoCard(
+                        memory: memory,
+                        imageUrl: _imageUrl(memory)!,
+                        labels: _labels(memory),
+                        onTest: () => _openMemorySlideshow(
+                          photoMemories,
+                          initialIndex: index,
+                        ),
+                        onEdit: () => _editMemory(memory, categories),
+                        onDelete: () => _deleteMemory(memory),
+                      );
+                    },
+                  ),
+                ],
               ),
             if (!widget.embedded) ...[
               const SizedBox(height: 8),
@@ -618,6 +646,9 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
     }
   }
 
+  // Legacy quiz mode is kept for reference, but the app now uses the gentle
+  // memory-tour flow so patients are not scored or corrected.
+  // ignore: unused_element
   Future<void> _openMemoryTest(Map<String, dynamic> memory) async {
     if (_useGentleMemoryStoryMode()) {
       await _openMemoryStory(memory);
@@ -932,6 +963,147 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _openMemorySlideshow(
+    List<Map<String, dynamic>> memories, {
+    int initialIndex = 0,
+  }) async {
+    if (memories.isEmpty) return;
+    var currentIndex = initialIndex.clamp(0, memories.length - 1).toInt();
+
+    Future<void> speakCurrent() async {
+      final memory = memories[currentIndex];
+      await _speakOpenAiMemory(memory, _memoryNarration(memory));
+    }
+
+    Future<void>.delayed(const Duration(milliseconds: 450), () {
+      if (mounted) speakCurrent();
+    });
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final memory = memories[currentIndex];
+          final imageUrl = _imageUrl(memory)!;
+          final narration = _memoryNarration(memory);
+          final labels = _labels(memory);
+          final currentNumber = currentIndex + 1;
+          return AlertDialog(
+            title: Text(_copy(context, 'جولة الذكريات', 'Memory tour')),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.network(
+                    imageUrl,
+                    height: 230,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 180,
+                      color: const Color(0xFFF4EEFF),
+                      child: const Center(
+                        child: Icon(Icons.broken_image_outlined,
+                            color: RafeeqColors.primary, size: 42),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${memory['title']}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                if (labels.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: labels
+                        .map((label) => Chip(
+                              visualDensity: VisualDensity.compact,
+                              label: Text(label),
+                              avatar:
+                                  const Icon(Icons.person_outline, size: 16),
+                            ))
+                        .toList(),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF2A2148)
+                        : const Color(0xFFF4EEFF),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Text(
+                    narration,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _copy(
+                    context,
+                    'صورة $currentNumber من ${memories.length}',
+                    'Photo $currentNumber of ${memories.length}',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ]),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(_copy(context, 'إغلاق', 'Close')),
+              ),
+              IconButton.filledTonal(
+                tooltip: _copy(context, 'السابق', 'Previous'),
+                onPressed: memories.length <= 1
+                    ? null
+                    : () {
+                        setDialogState(() {
+                          currentIndex = (currentIndex - 1 + memories.length) %
+                              memories.length;
+                        });
+                        speakCurrent();
+                      },
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              IconButton.filledTonal(
+                tooltip: _copy(context, 'خل رفيق يقرأ', 'Let Rafeeq read'),
+                onPressed: speakCurrent,
+                icon: const Icon(Icons.volume_up_outlined),
+              ),
+              FilledButton.icon(
+                onPressed: memories.length <= 1
+                    ? null
+                    : () {
+                        setDialogState(() {
+                          currentIndex = (currentIndex + 1) % memories.length;
+                        });
+                        speakCurrent();
+                      },
+                icon: const Icon(Icons.chevron_right_rounded),
+                label: Text(_copy(context, 'التالي', 'Next')),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1304,96 +1476,90 @@ class _MemoryPhotoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    final prompt = memory['spoken_prompt']?.toString();
+    final labelText = labels.take(2).join(' • ');
     return RafeeqGlowCard(
       padding: EdgeInsets.zero,
       hero: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFF4EEFF),
-                child: const Center(
-                  child: Icon(Icons.broken_image_outlined,
-                      color: RafeeqColors.primary, size: 42),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: onTest,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFFF4EEFF),
+                        child: const Center(
+                          child: Icon(Icons.broken_image_outlined,
+                              color: RafeeqColors.primary, size: 34),
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      top: 8,
+                      end: 8,
+                      child: PopupMenuButton<String>(
+                        tooltip: isArabic ? 'خيارات' : 'Options',
+                        icon: const Icon(Icons.more_vert_rounded,
+                            color: Colors.white),
+                        color: Theme.of(context).cardColor,
+                        onSelected: (value) {
+                          if (value == 'edit') onEdit();
+                          if (value == 'delete') onDelete();
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Text(isArabic ? 'تعديل' : 'Edit'),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Text(isArabic ? 'حذف' : 'Delete'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  memory['title'].toString(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 17,
-                  ),
-                ),
-                if (labels.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: labels
-                        .map((label) => Chip(
-                              visualDensity: VisualDensity.compact,
-                              label: Text(label),
-                              avatar:
-                                  const Icon(Icons.person_outline, size: 16),
-                            ))
-                        .toList(),
-                  ),
-                ],
-                if (prompt != null && prompt.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    isArabic ? 'وصف رفيق: $prompt' : 'Rafeeq reads: $prompt',
+                    memory['title'].toString(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    labelText.isEmpty
+                        ? (isArabic ? 'اضغط للعرض' : 'Tap to show')
+                        : labelText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: onTest,
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: Text(isArabic ? 'اعرض الذكرى' : 'Show memory'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: Text(isArabic ? 'تعديل' : 'Edit'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline,
-                          size: 18, color: RafeeqColors.danger),
-                      label: Text(
-                        isArabic ? 'حذف' : 'Delete',
-                        style: const TextStyle(color: RafeeqColors.danger),
-                      ),
-                    ),
-                  ),
-                ]),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
