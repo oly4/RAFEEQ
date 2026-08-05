@@ -52,8 +52,6 @@ class _DualDashboardScreenState extends State<DualDashboardScreen> {
               padding: const EdgeInsets.all(18),
               child: Column(
                 children: [
-                  _DemoHeader(compact: compact),
-                  const SizedBox(height: 16),
                   Wrap(
                     alignment: WrapAlignment.center,
                     runAlignment: WrapAlignment.center,
@@ -110,67 +108,6 @@ class _DualDashboardScreenState extends State<DualDashboardScreen> {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-
-  static String _copy(BuildContext context, String ar, String en) =>
-      Localizations.localeOf(context).languageCode == 'ar' ? ar : en;
-}
-
-class _DemoHeader extends StatelessWidget {
-  const _DemoHeader({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 860),
-      child: RafeeqGlowCard(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 18 : 26,
-          vertical: compact ? 16 : 20,
-        ),
-        gradient: RafeeqGradients.aliveCardFor(Theme.of(context).brightness),
-        hero: true,
-        child: Row(
-          children: [
-            const CircleAvatar(
-              radius: 27,
-              backgroundColor: RafeeqColors.primary,
-              child: Icon(Icons.dashboard_customize_rounded,
-                  color: Colors.white, size: 27),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _copy(context, 'عرض رفيق المزدوج', 'RAFEEQ dual view'),
-                    style: textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _copy(
-                      context,
-                      'شوف داشبورد العائلة والطبيب في نفس صفحة الويب.',
-                      'See the family and doctor dashboards on one web page.',
-                    ),
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
