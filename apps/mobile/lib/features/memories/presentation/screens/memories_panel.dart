@@ -88,8 +88,8 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
         SnackBar(
           content: Text(_copy(
               context,
-              'ما فيه صور جاهزة للاختبار. ارفع صورة أولًا.',
-              'No photos are ready for testing. Upload a photo first.')),
+              'ما فيه صور جاهزة للعرض. ارفع صورة أولًا.',
+              'No photos are ready to show. Upload a photo first.')),
         ),
       );
       return;
@@ -121,7 +121,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
               subtitle: _copy(
                 context,
                 'ارفع صور العائلة والذكريات، ثم اختبر المريض بطريقة لطيفة مع تلميحات عند الحاجة.',
-                'Upload family photos and memories, then test the patient gently with hints when needed.',
+                'Upload family photos and memories, then let Rafeeq show them gently without testing or scoring.',
               ),
             ),
             const SizedBox(height: 16),
@@ -152,7 +152,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
               children: [
                 Expanded(
                   child: Text(
-                    _copy(context, 'صور اختبار الذاكرة', 'Memory test photos'),
+                    _copy(context, 'صور الذكريات', 'Memory photos'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -207,8 +207,8 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
               Text(
                 _copy(
                   context,
-                  'كل الصور هنا تُستخدم كاختبار ذاكرة فقط. لاحقًا نربطها بصوت رفيق عشان يسأل المريض ويعطي تلميح بالصوت.',
-                  'Photos here are used only for memory testing. Rafeeq can ask the patient and provide voice hints.',
+                  'كل الصور هنا تُستخدم لعرض ذكريات لطيفة بدون اختبار. رفيق يقرأ الوصف بصوت هادئ حسب الكلام المكتوب للصورة.',
+                  'Photos here are used for gentle memory viewing, not testing. Rafeeq reads the written description calmly.',
                 ),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -617,6 +617,10 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
   }
 
   Future<void> _openMemoryTest(Map<String, dynamic> memory) async {
+    if (_useGentleMemoryStoryMode()) {
+      await _openMemoryStory(memory);
+      return;
+    }
     final answer = TextEditingController();
     var feedback = '';
     var hintShown = false;
@@ -928,6 +932,105 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
         ),
       ),
     );
+  }
+
+  bool _useGentleMemoryStoryMode() => true;
+
+  Future<void> _openMemoryStory(Map<String, dynamic> memory) async {
+    final imageUrl = _imageUrl(memory)!;
+    final narration = _memoryNarration(memory);
+    Future<void>.delayed(const Duration(milliseconds: 450), () {
+      if (mounted) _speakOpenAiMemory(memory, narration);
+    });
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_copy(context, 'عرض الذكرى', 'Memory story')),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.network(
+                imageUrl,
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 170,
+                  color: const Color(0xFFF4EEFF),
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined,
+                        color: RafeeqColors.primary, size: 42),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _copy(
+                context,
+                'رفيق يعرض الذكرى ويقرأ الوصف بهدوء بدون اختبار أو تقييم.',
+                'Rafeeq shows the memory and reads it gently with no test or scoring.',
+              ),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF2A2148)
+                    : const Color(0xFFF4EEFF),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Text(
+                narration,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(_copy(context, 'إغلاق', 'Close')),
+          ),
+          FilledButton.icon(
+            onPressed: () => _speakOpenAiMemory(memory, narration),
+            icon: const Icon(Icons.volume_up_outlined),
+            label: Text(_copy(context, 'خل رفيق يقرأ', 'Let Rafeeq read')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _memoryNarration(Map<String, dynamic> memory) {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    String clean(Object? value) => value?.toString().trim() ?? '';
+    final prompt = clean(memory['spoken_prompt']);
+    if (prompt.isNotEmpty) return prompt;
+    final description = clean(memory['description']);
+    if (description.isNotEmpty) return description;
+    final labels = _labels(memory);
+    if (labels.isNotEmpty) {
+      final joined = labels.join(isArabic ? ' و ' : ' and ');
+      return isArabic
+          ? 'هذه ذكرى جميلة مع $joined.'
+          : 'This is a warm memory with $joined.';
+    }
+    final title = clean(memory['title']);
+    if (title.isNotEmpty) {
+      return isArabic ? 'هذه ذكرى عن $title.' : 'This memory is about $title.';
+    }
+    return isArabic
+        ? 'هذه صورة من الذكريات الجميلة.'
+        : 'This is a gentle memory photo.';
   }
 
   Future<void> _speakOpenAiMemory(
@@ -1259,9 +1362,8 @@ class _MemoryPhotoCard extends StatelessWidget {
                   width: double.infinity,
                   child: FilledButton.icon(
                     onPressed: onTest,
-                    icon: const Icon(Icons.quiz_outlined),
-                    label: Text(
-                        isArabic ? 'ابدأ اختبار الذاكرة' : 'Start memory test'),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: Text(isArabic ? 'اعرض الذكرى' : 'Show memory'),
                   ),
                 ),
                 const SizedBox(height: 8),
