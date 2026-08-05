@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -49,12 +50,18 @@ class AppSession extends ChangeNotifier {
         status = SessionStatus.unauthenticated;
       } else {
         api.setAccessToken(accessToken);
+        final restoredCachedSession = await _restoreCachedSession();
+        if (restoredCachedSession) {
+          status = SessionStatus.authenticated;
+          notifyListeners();
+        }
         final response = await api.dio.get<Map<String, dynamic>>('/auth/me');
         user = AppUser.fromJson(response.data!);
         if (savedLocale == null) {
           locale = Locale(response.data!['locale']?.toString() ?? 'ar');
         }
         await loadPatients();
+        await _cacheSessionSnapshot();
         status = SessionStatus.authenticated;
       }
     } catch (_) {
@@ -64,6 +71,7 @@ class AppSession extends ChangeNotifier {
           final response = await api.dio.get<Map<String, dynamic>>('/auth/me');
           user = AppUser.fromJson(response.data!);
           await loadPatients();
+          await _cacheSessionSnapshot();
           status = SessionStatus.authenticated;
         } catch (_) {
           await _clearTokens();
@@ -112,6 +120,7 @@ class AppSession extends ChangeNotifier {
     await _safeWrite('access_token', accessToken!);
     await _safeWrite('refresh_token', refreshToken!);
     await loadPatients();
+    await _cacheSessionSnapshot();
     status = SessionStatus.authenticated;
   }
 
@@ -151,6 +160,7 @@ class AppSession extends ChangeNotifier {
           'preferred_language': locale.languageCode
         });
         await loadPatients();
+        await _cacheSessionSnapshot();
       });
 
   Future<void> logout() async {
@@ -248,10 +258,45 @@ class AppSession extends ChangeNotifier {
     try {
       await _storage.delete(key: 'access_token');
       await _storage.delete(key: 'refresh_token');
+      await _storage.delete(key: 'cached_user');
+      await _storage.delete(key: 'cached_patients');
     } catch (_) {}
     try {
       _browserStorage.delete('access_token');
       _browserStorage.delete('refresh_token');
+      _browserStorage.delete('cached_user');
+      _browserStorage.delete('cached_patients');
     } catch (_) {}
+  }
+
+  Future<bool> _restoreCachedSession() async {
+    try {
+      final cachedUser = await _safeRead('cached_user');
+      final cachedPatients = await _safeRead('cached_patients');
+      if (cachedUser == null || cachedPatients == null) return false;
+      final decodedUser = jsonDecode(cachedUser);
+      final decodedPatients = jsonDecode(cachedPatients);
+      if (decodedUser is! Map || decodedPatients is! List) return false;
+      user = AppUser.fromJson(Map<String, dynamic>.from(decodedUser));
+      patients = decodedPatients
+          .whereType<Map>()
+          .map((item) => PatientSummary.fromJson(
+                Map<String, dynamic>.from(item),
+              ))
+          .toList();
+      return user != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _cacheSessionSnapshot() async {
+    final currentUser = user;
+    if (currentUser == null) return;
+    await _safeWrite('cached_user', jsonEncode(currentUser.toJson()));
+    await _safeWrite(
+      'cached_patients',
+      jsonEncode(patients.map((patient) => patient.toJson()).toList()),
+    );
   }
 }

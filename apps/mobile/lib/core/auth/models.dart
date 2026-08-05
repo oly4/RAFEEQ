@@ -15,6 +15,13 @@ class AppUser {
         fullName: json['full_name'] as String,
         email: json['email'] as String,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'role': role,
+        'full_name': fullName,
+        'email': email,
+      };
 }
 
 class PatientSummary {
@@ -29,4 +36,10 @@ class PatientSummary {
         displayName: json['display_name'] as String,
         timezone: json['timezone'] as String,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'display_name': displayName,
+        'timezone': timezone,
+      };
 }
