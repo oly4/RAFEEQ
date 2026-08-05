@@ -5,6 +5,7 @@ import '../core/auth/app_session.dart';
 import '../core/auth/providers.dart';
 import '../features/dashboard/presentation/screens/caregiver_home_screen.dart';
 import '../features/camera/presentation/screens/camera_test_screen.dart';
+import '../features/demo/presentation/screens/dual_dashboard_screen.dart';
 import '../features/doctor/presentation/screens/doctor_home_screen.dart';
 import '../features/onboarding/presentation/screens/auth_screen.dart';
 import '../features/onboarding/presentation/screens/role_entry_screen.dart';
@@ -19,12 +20,19 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: session,
     redirect: (context, state) {
       final location = state.matchedLocation;
+      if (location == '/dual-dashboard') return null;
       if (session.status == SessionStatus.loading) {
         return location == '/splash' ? null : '/splash';
       }
       if (session.status == SessionStatus.unauthenticated) {
-        return {'/welcome', '/access', '/login', '/register', '/camera-test'}
-                .contains(location)
+        return {
+          '/welcome',
+          '/access',
+          '/login',
+          '/register',
+          '/camera-test',
+          '/dual-dashboard'
+        }.contains(location)
             ? null
             : '/welcome';
       }
@@ -61,6 +69,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               )),
       GoRoute(
           path: '/camera-test', builder: (_, __) => const CameraTestScreen()),
+      GoRoute(
+          path: '/dual-dashboard',
+          builder: (_, __) => const DualDashboardScreen()),
       GoRoute(
           path: '/patient/new',
           builder: (_, __) => const CreatePatientScreen()),

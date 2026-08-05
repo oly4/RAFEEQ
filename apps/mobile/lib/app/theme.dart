@@ -571,6 +571,9 @@ class RafeeqAppViewport extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, constraints) {
+          if (Uri.base.fragment.startsWith('/dual-dashboard')) {
+            return child;
+          }
           final brightness = Theme.of(context).brightness;
           final phoneWidth = math.min(366.0, constraints.maxWidth - 24);
           const phoneHeight = 772.0;

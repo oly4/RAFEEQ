@@ -13,13 +13,16 @@ import 'models.dart';
 enum SessionStatus { loading, unauthenticated, authenticated }
 
 class AppSession extends ChangeNotifier {
-  AppSession({ApiClient? apiClient}) : api = apiClient ?? ApiClient() {
+  AppSession({ApiClient? apiClient, String storagePrefix = ''})
+      : api = apiClient ?? ApiClient(),
+        _storagePrefix = storagePrefix {
     api.refreshAccessToken = _refreshAccessToken;
   }
 
   final ApiClient api;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final BrowserSessionStorage _browserStorage = BrowserSessionStorage();
+  final String _storagePrefix;
   SessionStatus status = SessionStatus.loading;
   Locale locale = const Locale('ar');
   ThemeMode themeMode = ThemeMode.system;
@@ -218,23 +221,25 @@ class AppSession extends ChangeNotifier {
   }
 
   Future<String?> _safeRead(String key) async {
+    final storageKey = _storageKey(key);
     try {
-      final value = await _storage.read(key: key);
+      final value = await _storage.read(key: storageKey);
       if (value != null) return value;
     } catch (_) {
       // On plain HTTP web deployments, secure storage can be unavailable.
     }
     try {
-      return _browserStorage.read(key);
+      return _browserStorage.read(storageKey);
     } catch (_) {
       return null;
     }
   }
 
   Future<void> _safeWrite(String key, String value) async {
+    final storageKey = _storageKey(key);
     var wroteSecurely = false;
     try {
-      await _storage.write(key: key, value: value);
+      await _storage.write(key: storageKey, value: value);
       wroteSecurely = true;
     } catch (error) {
       if (kDebugMode) {
@@ -243,7 +248,7 @@ class AppSession extends ChangeNotifier {
       }
     }
     try {
-      _browserStorage.write(key, value);
+      _browserStorage.write(storageKey, value);
     } catch (error) {
       if (kDebugMode && !wroteSecurely) {
         debugPrint('Browser session storage unavailable: $error');
@@ -256,18 +261,20 @@ class AppSession extends ChangeNotifier {
     refreshToken = null;
     api.setAccessToken(null);
     try {
-      await _storage.delete(key: 'access_token');
-      await _storage.delete(key: 'refresh_token');
-      await _storage.delete(key: 'cached_user');
-      await _storage.delete(key: 'cached_patients');
+      await _storage.delete(key: _storageKey('access_token'));
+      await _storage.delete(key: _storageKey('refresh_token'));
+      await _storage.delete(key: _storageKey('cached_user'));
+      await _storage.delete(key: _storageKey('cached_patients'));
     } catch (_) {}
     try {
-      _browserStorage.delete('access_token');
-      _browserStorage.delete('refresh_token');
-      _browserStorage.delete('cached_user');
-      _browserStorage.delete('cached_patients');
+      _browserStorage.delete(_storageKey('access_token'));
+      _browserStorage.delete(_storageKey('refresh_token'));
+      _browserStorage.delete(_storageKey('cached_user'));
+      _browserStorage.delete(_storageKey('cached_patients'));
     } catch (_) {}
   }
+
+  String _storageKey(String key) => '$_storagePrefix$key';
 
   Future<bool> _restoreCachedSession() async {
     try {
