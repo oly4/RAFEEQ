@@ -1643,6 +1643,7 @@ class RoutineTab extends StatefulWidget {
 
 class _RoutineTabState extends State<RoutineTab> {
   late Future<List<Map<String, dynamic>>> future;
+  List<Map<String, dynamic>>? _cachedItems;
 
   @override
   void initState() {
@@ -1652,20 +1653,26 @@ class _RoutineTabState extends State<RoutineTab> {
 
   Future<List<Map<String, dynamic>>> _load() async {
     final patientId = widget.session.currentPatient!.id;
-    final routines = await widget.session.api.dio
-        .get<Map<String, dynamic>>('/patients/$patientId/routines');
-    final occurrences = await widget.session.api.dio
-        .get<Map<String, dynamic>>('/patients/$patientId/routine-occurrences');
+    final responses = await Future.wait<dynamic>([
+      widget.session.api.dio
+          .get<Map<String, dynamic>>('/patients/$patientId/routines'),
+      widget.session.api.dio.get<Map<String, dynamic>>(
+          '/patients/$patientId/routine-occurrences'),
+    ]);
+    final routines = responses[0] as dynamic;
+    final occurrences = responses[1] as dynamic;
     final routineItems =
         (routines.data!['items'] as List).cast<Map<String, dynamic>>();
     final occurrenceItems =
         (occurrences.data!['items'] as List).cast<Map<String, dynamic>>();
-    return routineItems.map((routine) {
+    final items = routineItems.map((routine) {
       final occurrence = occurrenceItems
           .where((item) => item['routine_id'] == routine['id'])
           .firstOrNull;
       return {...routine, 'occurrence': occurrence};
     }).toList();
+    _cachedItems = items;
+    return items;
   }
 
   void refresh() => setState(() => future = _load());
@@ -1677,15 +1684,17 @@ class _RoutineTabState extends State<RoutineTab> {
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: future,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          final cachedItems = _cachedItems;
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              cachedItems == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
+          if (snapshot.hasError && cachedItems == null) {
             return _ErrorState(
                 message: widget.session.api.errorMessage(snapshot.error!),
                 retry: refresh);
           }
-          final items = snapshot.data!;
+          final items = snapshot.data ?? cachedItems ?? const [];
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 124),
             itemCount: items.length + 2,
