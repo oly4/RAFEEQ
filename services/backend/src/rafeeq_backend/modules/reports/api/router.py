@@ -25,11 +25,11 @@ def report_summary(
     patient_id: str,
     user: CurrentUser,
     db: DbSession,
-    period: Literal["all", "week", "month", "quarter"] = "all",
+    period: Literal["day", "all", "week", "month", "quarter"] = "day",
 ) -> ReportSummary:
     require_patient_access(db, user, patient_id)
     now = datetime.now(timezone.utc)
-    period_days = {"week": 7, "month": 30, "quarter": 90}
+    period_days = {"day": 1, "week": 7, "month": 30, "quarter": 90}
     range_days = period_days.get(period)
     range_start_at = now - timedelta(days=range_days) if range_days else None
     occurrence_statement = select(RoutineOccurrence).where(

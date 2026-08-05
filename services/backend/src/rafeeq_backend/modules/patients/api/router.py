@@ -53,6 +53,8 @@ from rafeeq_backend.modules.patients.domain.schemas import (
 
 router = APIRouter(tags=["patients"])
 
+REPORT_ROUTINE_TYPES = {"medication", "meal", "water", "appointment", "custom"}
+
 
 @router.get("/patients", response_model=PatientList)
 def list_patients(user: CurrentUser, db: DbSession) -> PatientList:
@@ -157,6 +159,19 @@ def patient_dashboard(patient_id: str, user: CurrentUser, db: DbSession) -> Dash
             )
         ).all()
     )
+    active_report_routines = list(
+        db.scalars(
+            select(Routine).where(
+                Routine.patient_id == patient_id,
+                Routine.type.in_(REPORT_ROUTINE_TYPES),
+                Routine.is_active.is_(True),
+                Routine.start_date <= today,
+                (Routine.end_date.is_(None) | (Routine.end_date >= today)),
+            )
+        ).all()
+    )
+    report_routine_ids = {routine.id for routine in active_report_routines}
+    occurrences = [item for item in occurrences if item.routine_id in report_routine_ids]
     active_medication_routines = list(
         db.scalars(
             select(Routine).where(
@@ -189,7 +204,9 @@ def patient_dashboard(patient_id: str, user: CurrentUser, db: DbSession) -> Dash
     device = db.scalar(
         select(Device).where(Device.patient_id == patient_id).order_by(Device.created_at.desc())
     )
-    completion = round(len(completed) * 100 / len(occurrences)) if occurrences else 0
+    routine_total = len(occurrences) if occurrences else len(active_report_routines)
+    routine_completed = len(completed)
+    completion = round(routine_completed * 100 / routine_total) if routine_total else 0
     return DashboardSummary(
         patient=PatientResponse.model_validate(patient),
         device_status=device.status if device else "unpaired",
@@ -197,8 +214,8 @@ def patient_dashboard(patient_id: str, user: CurrentUser, db: DbSession) -> Dash
         medication_total=medication_total,
         medication_completed=medication_completed_total,
         medication_pending=medication_pending,
-        routine_total=len(occurrences),
-        routine_completed=len(completed),
+        routine_total=routine_total,
+        routine_completed=routine_completed,
         active_emergencies=active_emergencies,
     )
 

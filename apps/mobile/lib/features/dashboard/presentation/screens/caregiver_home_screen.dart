@@ -3047,10 +3047,22 @@ class _ReportsTabState extends State<ReportsTab> {
   @override
   void initState() {
     super.initState();
-    future = widget.session.api.dio
-        .get<Map<String, dynamic>>(
-            '/patients/${widget.session.currentPatient!.id}/reports/summary')
-        .then((value) => value.data!);
+    future = _loadReport();
+  }
+
+  Future<Map<String, dynamic>> _loadReport() {
+    const periods = ['day', 'week', 'month'];
+    return widget.session.api.dio.get<Map<String, dynamic>>(
+      '/patients/${widget.session.currentPatient!.id}/reports/summary',
+      queryParameters: {'period': periods[selectedPeriod]},
+    ).then((value) => value.data!);
+  }
+
+  void _selectPeriod(int period) {
+    setState(() {
+      selectedPeriod = period;
+      future = _loadReport();
+    });
   }
 
   @override
@@ -3076,8 +3088,7 @@ class _ReportsTabState extends State<ReportsTab> {
             ),
             selected: {selectedPeriod},
             showSelectedIcon: false,
-            onSelectionChanged: (value) =>
-                setState(() => selectedPeriod = value.first),
+            onSelectionChanged: (value) => _selectPeriod(value.first),
           ),
           const SizedBox(height: 14),
           RafeeqGlowCard(

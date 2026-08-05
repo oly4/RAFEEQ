@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -131,6 +132,61 @@ def test_medication_routine_materializes_and_completes_occurrence() -> None:
     )
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
+
+
+def test_dashboard_progress_tracks_today_report_routines_only() -> None:
+    client = make_client()
+    token = register_and_login(client, "dashboard-progress@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    today = datetime.now(timezone.utc).date().isoformat()
+    patient_id = client.post(
+        "/api/v1/patients",
+        headers=headers,
+        json={"display_name": "Amina", "timezone": "UTC"},
+    ).json()["id"]
+    appointment = client.post(
+        f"/api/v1/patients/{patient_id}/routines",
+        headers=headers,
+        json={
+            "type": "appointment",
+            "title": "Meeting",
+            "timezone": "UTC",
+            "start_date": today,
+            "scheduled_local_time": "09:00:00",
+        },
+    ).json()
+    memory = client.post(
+        f"/api/v1/patients/{patient_id}/routines",
+        headers=headers,
+        json={
+            "type": "memory_exercise",
+            "title": "Photo test",
+            "timezone": "UTC",
+            "start_date": today,
+            "scheduled_local_time": "10:00:00",
+        },
+    )
+    assert memory.status_code == 201, memory.text
+    dashboard = client.get(f"/api/v1/patients/{patient_id}/dashboard", headers=headers)
+    assert dashboard.json()["routine_total"] == 1
+    assert dashboard.json()["daily_completion_percentage"] == 0
+
+    occurrence = next(
+        item
+        for item in client.get(
+            f"/api/v1/patients/{patient_id}/routine-occurrences", headers=headers
+        ).json()["items"]
+        if item["routine_id"] == appointment["id"]
+    )
+    completed = client.post(
+        f"/api/v1/routine-occurrences/{occurrence['id']}/complete",
+        headers=headers,
+        json={"confirmation_source": "caregiver"},
+    )
+    assert completed.status_code == 200, completed.text
+    updated = client.get(f"/api/v1/patients/{patient_id}/dashboard", headers=headers)
+    assert updated.json()["routine_completed"] == 1
+    assert updated.json()["daily_completion_percentage"] == 100
 
 
 def test_device_snapshot_includes_completed_app_tasks() -> None:
