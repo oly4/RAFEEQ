@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -743,7 +744,8 @@ class _FrameStreamServer:
 def _make_stream_handler(stream: _FrameStreamServer) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
-            if self.path in {"/", "/index.html"}:
+            path = urllib.parse.urlparse(self.path).path
+            if path in {"/", "/index.html"}:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
@@ -766,7 +768,7 @@ def _make_stream_handler(stream: _FrameStreamServer) -> type[BaseHTTPRequestHand
 </html>"""
                 )
                 return
-            if self.path == "/snapshot.jpg":
+            if path == "/snapshot.jpg":
                 frame = stream.latest_frame()
                 if frame is None:
                     self.send_error(503, "No frame yet")
@@ -777,7 +779,7 @@ def _make_stream_handler(stream: _FrameStreamServer) -> type[BaseHTTPRequestHand
                 self.end_headers()
                 self.wfile.write(frame)
                 return
-            if self.path == "/stream.mjpg":
+            if path == "/stream.mjpg":
                 self.send_response(200)
                 self.send_header("Age", "0")
                 self.send_header("Cache-Control", "no-cache, private")

@@ -8,7 +8,9 @@ param(
 
     [int]$WebPort = 80,
 
-    [string]$CameraStreamUrl = "",
+    [string]$CameraStreamUrl = "http://$ServerHost`:8090/stream.mjpg",
+
+    [string]$CameraControlBaseUrl = "http://$ServerHost`:18000/api/v1",
 
     [switch]$SkipBuild
 )
@@ -39,7 +41,8 @@ if (-not $SkipBuild) {
         & $Flutter build web --no-wasm-dry-run `
             --dart-define=API_BASE_URL=http://$ServerHost`:$BackendPort/api/v1 `
             --dart-define=WS_BASE_URL=ws://$ServerHost`:$BackendPort `
-            --dart-define=RAFEEQ_CAMERA_STREAM_URL=$CameraStreamUrl
+            --dart-define=RAFEEQ_CAMERA_STREAM_URL=$CameraStreamUrl `
+            --dart-define=RAFEEQ_CAMERA_CONTROL_BASE_URL=$CameraControlBaseUrl
         if ($LASTEXITCODE -ne 0) { throw "flutter build web failed." }
     } finally {
         Pop-Location

@@ -14,6 +14,7 @@ class CameraStreamView extends StatefulWidget {
 
 class _CameraStreamViewState extends State<CameraStreamView> {
   late final String _viewType;
+  web.HTMLImageElement? _image;
 
   @override
   void initState() {
@@ -23,6 +24,7 @@ class _CameraStreamViewState extends State<CameraStreamView> {
       final image = web.HTMLImageElement()
         ..src = widget.streamUrl
         ..alt = 'RAFEEQ Raspberry Pi camera stream';
+      _image = image;
       image.style
         ..width = '100%'
         ..height = '100%'
@@ -31,6 +33,16 @@ class _CameraStreamViewState extends State<CameraStreamView> {
         ..borderRadius = '20px';
       return image;
     });
+  }
+
+  @override
+  void dispose() {
+    final image = _image;
+    if (image != null) {
+      image.src = '';
+      image.remove();
+    }
+    super.dispose();
   }
 
   @override

@@ -98,13 +98,14 @@ write_env_files() {
   chown root:"$SERVICE_USER" /etc/rafeeq
   chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/data"
 
-  local jwt_access jwt_refresh demo_caregiver demo_doctor demo_device openai_key
+  local jwt_access jwt_refresh demo_caregiver demo_doctor demo_device openai_key network_pin
   jwt_access="$(random_secret)"
   jwt_refresh="$(random_secret)"
   demo_caregiver="${DEMO_CAREGIVER_PASSWORD:-Rafeeq-Test-2026!}"
   demo_doctor="${DEMO_DOCTOR_PASSWORD:-Rafeeq-Test-2026!}"
   demo_device="${DEMO_DEVICE_SECRET:-$(random_secret)}"
   openai_key="${OPENAI_API_KEY:-}"
+  network_pin="${NETWORK_CONTROL_ADMIN_PIN:-$(openssl rand -hex 3)}"
 
   cat >/etc/rafeeq/backend.env <<EOF
 APP_ENV=development
@@ -117,7 +118,7 @@ JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=30
 MQTT_HOST=127.0.0.1
 MQTT_PORT=1883
-CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000
+CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000,http://165.232.35.247
 LOG_LEVEL=INFO
 DEMO_CAREGIVER_PASSWORD=${demo_caregiver}
 DEMO_DOCTOR_PASSWORD=${demo_doctor}
@@ -129,6 +130,11 @@ OPENAI_REASONING_EFFORT=low
 OPENAI_TRANSCRIPTION_MODEL=gpt-4o-transcribe
 OPENAI_TTS_MODEL=gpt-4o-mini-tts
 OPENAI_TTS_VOICE=alloy
+CAMERA_CONTROL_ENABLED=true
+CAMERA_SERVICE_NAME=rafeeq-camera
+NETWORK_CONTROL_ENABLED=true
+NETWORK_CONTROL_ADMIN_PIN=${network_pin}
+NETWORK_CONTROL_HELPER=${INSTALL_DIR}/scripts/rafeeq_network_control.py
 EOF
   chmod 640 /etc/rafeeq/backend.env
   chown root:"$SERVICE_USER" /etc/rafeeq/backend.env
@@ -203,6 +209,7 @@ EOF
 RAFEEQ Raspberry Pi setup complete.
 Pi IP: ${pi_ip}
 Backend health: http://${pi_ip}:${BACKEND_PORT}/health/ready
+Raspberry Pi network admin PIN: ${NETWORK_CONTROL_ADMIN_PIN:-$(grep '^NETWORK_CONTROL_ADMIN_PIN=' /etc/rafeeq/backend.env | cut -d= -f2-)}
 Flutter command on Windows:
   .\\scripts\\run_app_windows.ps1 -BackendHost ${pi_ip} -RemoteBackend
 
@@ -221,6 +228,19 @@ ${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff, /usr/sbin/shut
 EOF
   chmod 440 /etc/sudoers.d/rafeeq-poweroff
   visudo -cf /etc/sudoers.d/rafeeq-poweroff >/dev/null
+
+  cat >/etc/sudoers.d/rafeeq-camera-control <<EOF
+${SERVICE_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl start rafeeq-camera, /usr/bin/systemctl stop rafeeq-camera
+EOF
+  chmod 440 /etc/sudoers.d/rafeeq-camera-control
+  visudo -cf /etc/sudoers.d/rafeeq-camera-control >/dev/null
+
+  chmod 755 "$INSTALL_DIR/scripts/rafeeq_network_control.py"
+  cat >/etc/sudoers.d/rafeeq-network-control <<EOF
+${SERVICE_USER} ALL=(root) NOPASSWD: ${INSTALL_DIR}/scripts/rafeeq_network_control.py status, ${INSTALL_DIR}/scripts/rafeeq_network_control.py scan, ${INSTALL_DIR}/scripts/rafeeq_network_control.py connect
+EOF
+  chmod 440 /etc/sudoers.d/rafeeq-network-control
+  visudo -cf /etc/sudoers.d/rafeeq-network-control >/dev/null
 }
 
 install_services() {
@@ -228,12 +248,22 @@ install_services() {
   install -m 0644 "$INSTALL_DIR/infra/systemd/rafeeq-backend.service" /etc/systemd/system/rafeeq-backend.service
   install -m 0644 "$INSTALL_DIR/infra/systemd/rafeeq-robot.service" /etc/systemd/system/rafeeq-robot.service
   install -m 0644 "$INSTALL_DIR/infra/systemd/rafeeq-camera.service" /etc/systemd/system/rafeeq-camera.service
+  if [ -f "$INSTALL_DIR/infra/systemd/rafeeq-camera-control-tunnel.service" ]; then
+    install -m 0644 "$INSTALL_DIR/infra/systemd/rafeeq-camera-control-tunnel.service" /etc/systemd/system/rafeeq-camera-control-tunnel.service
+  fi
   systemctl daemon-reload
-  systemctl enable rafeeq-backend rafeeq-robot rafeeq-camera
+  systemctl enable rafeeq-backend rafeeq-robot
+  if [ -f /etc/systemd/system/rafeeq-camera-control-tunnel.service ]; then
+    systemctl enable rafeeq-camera-control-tunnel
+  fi
+  systemctl disable rafeeq-camera || true
   systemctl restart rafeeq-backend
   sleep 4
   systemctl restart rafeeq-robot
-  systemctl restart rafeeq-camera || true
+  if [ -f /etc/systemd/system/rafeeq-camera-control-tunnel.service ]; then
+    systemctl restart rafeeq-camera-control-tunnel || true
+  fi
+  systemctl stop rafeeq-camera || true
 }
 
 main() {

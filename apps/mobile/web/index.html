@@ -20,6 +20,9 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="RAFEEQ daily care and support for older adults.">
   <meta name="theme-color" content="#6D4FC2">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -34,6 +37,26 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.getRegistrations()
+        .then(function (registrations) {
+          return Promise.all(registrations.map(function (registration) {
+            return registration.unregister();
+          }));
+        })
+        .then(function () {
+          if (!('caches' in window)) return Promise.resolve();
+          return caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (key) {
+              return caches.delete(key);
+            }));
+          });
+        })
+        .catch(function () {});
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

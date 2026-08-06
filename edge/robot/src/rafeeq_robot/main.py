@@ -1,3 +1,4 @@
+import json
 import re
 import shlex
 import subprocess
@@ -38,6 +39,7 @@ from rafeeq_robot.transport.http_client import create_device_client
 
 VOICE_PAUSE_FILE = Path("/tmp/rafeeq_voice_paused")
 VOICE_MIC_RESERVED_FILE = Path("/tmp/rafeeq-runtime/voice_mic_reserved")
+VOICE_COMMAND_DIR = Path("/tmp/rafeeq-runtime/voice-commands")
 
 
 def main() -> None:
@@ -111,6 +113,7 @@ def main() -> None:
                 print(f"Initial synchronization failed; local behavior remains active: {exc}")
         if voice_input is not None:
             _start_daemon_voice_loop(voice, voice_input, settings, speaker, outbox, poems, memories)
+        _start_robot_speech_command_watcher(speaker)
         print("Daemon mode active.")
         _speak_startup_greeting(settings, speaker, voice_input is not None)
         try:
@@ -564,6 +567,39 @@ def _start_daemon_voice_loop(
             except Exception as exc:
                 print(f"Voice handling failed: {exc}")
             time.sleep(0.5)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def _start_robot_speech_command_watcher(speaker: SpeakerAdapter) -> None:
+    def worker() -> None:
+        VOICE_COMMAND_DIR.mkdir(parents=True, exist_ok=True)
+        print(f"Robot speech command watcher active: {VOICE_COMMAND_DIR}")
+        while True:
+            try:
+                commands = sorted(VOICE_COMMAND_DIR.glob("*.json"))
+            except Exception as exc:
+                print(f"Robot speech command scan failed: {exc}")
+                time.sleep(2)
+                continue
+            if not commands:
+                time.sleep(0.5)
+                continue
+            for command_path in commands[:5]:
+                try:
+                    payload = json.loads(command_path.read_text(encoding="utf-8"))
+                    text = str(payload.get("text") or "").strip()
+                    locale = str(payload.get("locale") or "en").strip().lower()
+                    locale = "ar" if locale.startswith("ar") else "en"
+                    command_path.unlink(missing_ok=True)
+                    if not text:
+                        continue
+                    print(f"Robot speech command: {format_console_text(text)}")
+                    speaker.speak(text, locale)
+                except Exception as exc:
+                    print(f"Robot speech command failed: {exc}")
+                    command_path.unlink(missing_ok=True)
+            time.sleep(0.2)
 
     threading.Thread(target=worker, daemon=True).start()
 

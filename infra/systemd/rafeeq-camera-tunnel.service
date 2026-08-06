@@ -11,6 +11,7 @@ ExecStartPre=+/usr/bin/install -d -o bayan -g bayan -m 0700 /home/bayan/.ssh
 ExecStartPre=-/usr/bin/ssh-keygen -R 165.232.35.247
 ExecStartPre=+/bin/bash -lc '/usr/bin/ssh-keyscan -H 165.232.35.247 >> /home/bayan/.ssh/known_hosts'
 ExecStartPre=+/usr/bin/chown -R bayan:bayan /home/bayan/.ssh
+ExecStartPre=-/usr/bin/ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@165.232.35.247 '/usr/bin/fuser -k 8090/tcp'
 ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -R 0.0.0.0:8090:127.0.0.1:8090 root@165.232.35.247
 StandardOutput=append:/opt/rafeeq/.run/pi-camera-tunnel.log
 StandardError=append:/opt/rafeeq/.run/pi-camera-tunnel.log

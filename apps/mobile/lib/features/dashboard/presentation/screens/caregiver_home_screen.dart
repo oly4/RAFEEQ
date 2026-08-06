@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -3356,6 +3357,20 @@ class SettingsTab extends StatelessWidget {
         subtitle: strings.cameraTestSubtitle,
         onTap: () => _openPanel(context, const CameraTestScreen()),
       ),
+      RobotSpeechDemoSettingsSection(session: session),
+      const SizedBox(height: 12),
+      _settingsCard(
+        context,
+        icon: Icons.wifi_rounded,
+        title: _copy(context, 'شبكة الرازبيري', 'Raspberry Pi network'),
+        subtitle: _copy(
+          context,
+          'اعرض الشبكة أو غيّر الواي فاي',
+          'View or change the Pi Wi-Fi',
+        ),
+        onTap: () =>
+            _openPanel(context, RaspberryPiNetworkPanel(session: session)),
+      ),
       _settingsCard(
         context,
         icon: Icons.privacy_tip_outlined,
@@ -3494,6 +3509,586 @@ class SettingsTab extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => panel),
     );
+  }
+}
+
+class RobotSpeechDemoSettingsSection extends StatefulWidget {
+  const RobotSpeechDemoSettingsSection({required this.session, super.key});
+  final AppSession session;
+
+  @override
+  State<RobotSpeechDemoSettingsSection> createState() =>
+      _RobotSpeechDemoSettingsSectionState();
+}
+
+class _RobotSpeechDemoSettingsSectionState
+    extends State<RobotSpeechDemoSettingsSection> {
+  static const _piControlBaseUrl =
+      String.fromEnvironment('RAFEEQ_CAMERA_CONTROL_BASE_URL');
+
+  bool _busy = false;
+  String? _message;
+  String? _error;
+
+  bool get _isArabic => Localizations.localeOf(context).languageCode == 'ar';
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: RafeeqGlowCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const CircleAvatar(
+                  backgroundColor: RafeeqColors.lavender,
+                  child: Icon(Icons.record_voice_over_rounded,
+                      color: RafeeqColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isArabic
+                            ? 'أزرار صوت النموذج'
+                            : 'Prototype voice buttons',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        _isArabic
+                            ? 'أرسل رسالة جاهزة للروبوت'
+                            : 'Send a ready speech message to the robot',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                if (_busy)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ]),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _sendSpeech(
+                              'Mohammed, I want to remind you that you have an appointment after 5 minutes.',
+                              locale: 'en',
+                            ),
+                    icon: const Icon(Icons.event_available_rounded),
+                    label: Text(_isArabic ? 'الخاتمة' : 'Conclusion'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _busy
+                        ? null
+                        : () => _sendSpeech(
+                              'Mohammed, please remember to drink water now.',
+                              locale: 'en',
+                            ),
+                    icon: const Icon(Icons.water_drop_outlined),
+                    label: Text(_isArabic ? 'تذكير الماء' : 'Water'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _busy
+                        ? null
+                        : () => _sendSpeech(
+                              'Mohammed, this is RAFEEQ. I am ready to help you.',
+                              locale: 'en',
+                            ),
+                    icon: const Icon(Icons.smart_toy_outlined),
+                    label: Text(_isArabic ? 'جاهز' : 'Ready'),
+                  ),
+                ],
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _message!,
+                  style: const TextStyle(color: RafeeqColors.success),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+
+  Future<void> _sendSpeech(String text, {required String locale}) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final response = await _dio().post<Map<String, dynamic>>(
+        '/devices/raspberry-pi/demo-speech',
+        data: {
+          'text': text,
+          'locale': locale,
+        },
+      );
+      final spoken = response.data?['assistant_text']?.toString() ?? text;
+      if (!mounted) return;
+      setState(() {
+        _message = _isArabic ? 'تم الإرسال: $spoken' : 'Sent: $spoken';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _speechError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Dio _dio() {
+    if (_piControlBaseUrl.trim().isEmpty) return widget.session.api.dio;
+    return Dio(BaseOptions(
+      baseUrl: _normalizedPiControlBaseUrl(),
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 45),
+      headers: {
+        if (widget.session.accessToken != null)
+          'Authorization': 'Bearer ${widget.session.accessToken}',
+      },
+    ));
+  }
+
+  String _normalizedPiControlBaseUrl() {
+    final trimmed = _piControlBaseUrl.trim();
+    if (trimmed.endsWith('/api/v1')) return trimmed;
+    return '${trimmed.replaceAll(RegExp(r'/+$'), '')}/api/v1';
+  }
+
+  String _speechError(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['detail'] != null)
+        return data['detail'].toString();
+      if (data is Map && data['error'] is Map) {
+        final message = (data['error'] as Map)['message'];
+        if (message != null) return message.toString();
+      }
+    }
+    return _isArabic
+        ? 'تعذر إرسال الرسالة الصوتية الآن.'
+        : 'Could not send the speech message right now.';
+  }
+}
+
+class RaspberryPiNetworkPanel extends StatefulWidget {
+  const RaspberryPiNetworkPanel({required this.session, super.key});
+  final AppSession session;
+
+  @override
+  State<RaspberryPiNetworkPanel> createState() =>
+      _RaspberryPiNetworkPanelState();
+}
+
+class _RaspberryPiNetworkPanelState extends State<RaspberryPiNetworkPanel> {
+  static const _piControlBaseUrl =
+      String.fromEnvironment('RAFEEQ_CAMERA_CONTROL_BASE_URL');
+
+  final TextEditingController _ssidController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _pinController = TextEditingController();
+
+  Map<String, dynamic>? _status;
+  List<Map<String, dynamic>> _networks = const [];
+  Timer? _networkRetryTimer;
+  bool _busy = false;
+  String? _error;
+
+  bool get _isArabic => Localizations.localeOf(context).languageCode == 'ar';
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_loadStatus);
+  }
+
+  @override
+  void dispose() {
+    _networkRetryTimer?.cancel();
+    _ssidController.dispose();
+    _passwordController.dispose();
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _isArabic ? 'شبكة الرازبيري' : 'Raspberry Pi network';
+    final ssid = _status?['ssid']?.toString();
+    final state = _status?['state']?.toString();
+    final ips = (_status?['ip_addresses'] as List<dynamic>? ?? const [])
+        .map((item) => item.toString())
+        .join(', ');
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          RafeeqGlowCard(
+            hero: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const CircleAvatar(
+                    backgroundColor: RafeeqColors.lavender,
+                    child:
+                        Icon(Icons.wifi_rounded, color: RafeeqColors.primary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      ssid?.isNotEmpty == true
+                          ? ssid!
+                          : (_isArabic ? 'غير متصل' : 'Not connected'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (_busy)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ]),
+                const SizedBox(height: 12),
+                _networkLine(
+                  Icons.router_outlined,
+                  _isArabic ? 'الحالة' : 'State',
+                  state ?? (_isArabic ? 'غير معروف' : 'Unknown'),
+                ),
+                _networkLine(
+                  Icons.dns_outlined,
+                  _isArabic ? 'العنوان' : 'IP address',
+                  ips.isEmpty ? (_isArabic ? 'غير متاح' : 'Unavailable') : ips,
+                ),
+                _networkLine(
+                  Icons.settings_ethernet_outlined,
+                  _isArabic ? 'الواجهة' : 'Interface',
+                  _status?['interface']?.toString() ??
+                      (_isArabic ? 'غير معروف' : 'Unknown'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _loadStatus,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(_isArabic ? 'تحديث' : 'Refresh'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: _busy ? null : _scanNetworks,
+                icon: const Icon(Icons.radar_rounded),
+                label: Text(_isArabic ? 'بحث' : 'Scan'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          RafeeqGlowCard(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isArabic ? 'تغيير الواي فاي' : 'Change Wi-Fi',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                if (_networks.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    value: _ssidController.text.isEmpty
+                        ? null
+                        : _ssidController.text,
+                    decoration: InputDecoration(
+                      labelText: _isArabic ? 'الشبكة' : 'Network',
+                    ),
+                    items: _networks
+                        .map((network) => DropdownMenuItem<String>(
+                              value: network['ssid']?.toString() ?? '',
+                              child: Text(
+                                _networkLabel(network),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _ssidController.text = value);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                TextField(
+                  controller: _ssidController,
+                  decoration: InputDecoration(
+                    labelText: _isArabic ? 'اسم الشبكة' : 'SSID',
+                    prefixIcon: const Icon(Icons.wifi_rounded),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText:
+                        _isArabic ? 'كلمة مرور الواي فاي' : 'Wi-Fi password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _pinController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: _isArabic
+                        ? 'رمز تحكم الرازبيري'
+                        : 'Raspberry Pi admin PIN',
+                    prefixIcon: const Icon(Icons.pin_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _connectWifi,
+                    icon: const Icon(Icons.login_rounded),
+                    label: Text(_isArabic ? 'اتصال' : 'Connect'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _networkLine(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Icon(icon, size: 18, color: RafeeqColors.primary),
+          const SizedBox(width: 8),
+          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Expanded(child: Text(value, overflow: TextOverflow.ellipsis)),
+        ]),
+      );
+
+  String _networkLabel(Map<String, dynamic> network) {
+    final ssid = network['ssid']?.toString() ?? '';
+    final signal = network['signal']?.toString();
+    final security = network['security']?.toString();
+    final details = [
+      if (signal != null && signal.isNotEmpty) '$signal%',
+      if (security != null && security.isNotEmpty) security,
+    ].join(' · ');
+    return details.isEmpty ? ssid : '$ssid ($details)';
+  }
+
+  Future<void> _loadStatus() async {
+    await _networkRequest('network');
+  }
+
+  Future<void> _scanNetworks() async {
+    await _networkRequest('network/scan');
+  }
+
+  Future<void> _connectWifi() async {
+    final requestedSsid = _ssidController.text.trim();
+    if (requestedSsid.isEmpty || _pinController.text.trim().isEmpty) {
+      setState(() {
+        _error = _isArabic
+            ? 'أدخل اسم الشبكة ورمز التحكم.'
+            : 'Enter the SSID and admin PIN.';
+      });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _status = {
+        ...?_status,
+        'connected': false,
+        'ssid': requestedSsid,
+        'state': _isArabic ? 'جار الاتصال' : 'connecting',
+        'message': _isArabic
+            ? 'جاري تغيير شبكة الرازبيري...'
+            : 'Changing Raspberry Pi Wi-Fi...',
+      };
+    });
+    try {
+      final response = await _dio(receiveTimeout: const Duration(seconds: 20))
+          .post<Map<String, dynamic>>(
+        '/devices/raspberry-pi/network/connect',
+        data: {
+          'ssid': requestedSsid,
+          'password': _passwordController.text,
+          'admin_pin': _pinController.text.trim(),
+        },
+      );
+      final payload = response.data ?? const <String, dynamic>{};
+      if (!mounted) return;
+      setState(() {
+        _status = {
+          ...payload,
+          if ((payload['ssid']?.toString() ?? '').isEmpty)
+            'ssid': requestedSsid,
+        };
+        _networks = (payload['wifi_networks'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+      });
+      _scheduleNetworkRefresh();
+    } catch (error) {
+      if (!mounted) return;
+      final hasServerResponse =
+          error is DioException && error.response?.data != null;
+      setState(() {
+        if (hasServerResponse) {
+          _error = _networkError(error);
+        } else {
+          _error = _isArabic
+              ? 'تم إرسال الطلب. انتظر قليلاً ثم سيتم التحديث تلقائياً.'
+              : 'Wi-Fi change sent. Waiting for Raspberry Pi to reconnect...';
+          _status = {
+            ...?_status,
+            'connected': false,
+            'ssid': requestedSsid,
+            'state': _isArabic ? 'إعادة الاتصال' : 'reconnecting',
+          };
+          _scheduleNetworkRefresh();
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _scheduleNetworkRefresh({int attempt = 0}) {
+    _networkRetryTimer?.cancel();
+    if (attempt >= 6) return;
+    final delay = Duration(seconds: attempt == 0 ? 6 : 10);
+    _networkRetryTimer = Timer(delay, () async {
+      if (!mounted) return;
+      final ok = await _networkRequest(
+        attempt < 2 ? 'network' : 'network/scan',
+        showBusy: false,
+      );
+      if (!ok) _scheduleNetworkRefresh(attempt: attempt + 1);
+    });
+  }
+
+  Future<bool> _networkRequest(
+    String path, {
+    String method = 'GET',
+    Map<String, dynamic>? data,
+    bool showBusy = true,
+  }) async {
+    if (showBusy) {
+      setState(() {
+        _busy = true;
+        _error = null;
+      });
+    }
+    try {
+      final response = method == 'POST'
+          ? await _dio().post<Map<String, dynamic>>(
+              '/devices/raspberry-pi/$path',
+              data: data,
+            )
+          : await _dio()
+              .get<Map<String, dynamic>>('/devices/raspberry-pi/$path');
+      final payload = response.data ?? const <String, dynamic>{};
+      if (!mounted) return false;
+      setState(() {
+        _error = null;
+        _status = payload;
+        _networks = (payload['wifi_networks'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+      });
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      if (showBusy) setState(() => _error = _networkError(error));
+      return false;
+    } finally {
+      if (mounted && showBusy) setState(() => _busy = false);
+    }
+  }
+
+  Dio _dio({Duration receiveTimeout = const Duration(seconds: 60)}) {
+    if (_piControlBaseUrl.trim().isEmpty) return widget.session.api.dio;
+    return Dio(BaseOptions(
+      baseUrl: _normalizedPiControlBaseUrl(),
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: receiveTimeout,
+      headers: {
+        if (widget.session.accessToken != null)
+          'Authorization': 'Bearer ${widget.session.accessToken}',
+      },
+    ));
+  }
+
+  String _normalizedPiControlBaseUrl() {
+    final trimmed = _piControlBaseUrl.trim();
+    if (trimmed.endsWith('/api/v1')) return trimmed;
+    return '${trimmed.replaceAll(RegExp(r'/+$'), '')}/api/v1';
+  }
+
+  String _networkError(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['detail'] != null) {
+        return data['detail'].toString();
+      }
+      if (data is Map && data['error'] is Map) {
+        final message = (data['error'] as Map)['message'];
+        if (message != null) return message.toString();
+      }
+    }
+    return _isArabic
+        ? 'تعذر الوصول إلى شبكة الرازبيري الآن.'
+        : 'Could not reach the Raspberry Pi network controls right now.';
   }
 }
 

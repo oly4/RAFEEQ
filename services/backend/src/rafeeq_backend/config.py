@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     openai_transcription_model: str = "gpt-4o-mini-transcribe"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
+    camera_control_enabled: bool = False
+    camera_service_name: str = "rafeeq-camera"
+    network_control_enabled: bool = False
+    network_control_admin_pin: SecretStr | None = None
+    network_control_helper: str = "/opt/rafeeq/scripts/rafeeq_network_control.py"
 
     model_config = SettingsConfigDict(env_file=(ROOT_ENV, ROBOT_ENV), extra="ignore")
 
