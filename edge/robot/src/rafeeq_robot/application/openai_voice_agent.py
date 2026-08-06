@@ -519,7 +519,7 @@ def _default_action_text(action: str, locale: str = "ar") -> str:
         "open_album": "تم، فتحت لك الألبوم.",
         "open_settings": "تم، فتحت لك الإعدادات.",
         "start_poem_test": "أبشر، نبدأ تمرين القصيدة بهدوء.",
-        "start_photo_test": "تم، نبدأ تمرين الصور.",
+        "start_photo_test": "أبشر، نبدأ جولة الذكريات بهدوء.",
         "add_routine": "تم، أضفت المهمة.",
         "edit_routine": "تم، فتحت لك تعديل الروتين.",
         "delete_routine": "تم، فتحت لك حذف المهمة.",
@@ -533,7 +533,7 @@ def _default_action_text(action: str, locale: str = "ar") -> str:
         "open_album": "Done. I opened the album.",
         "open_settings": "Done. I opened settings.",
         "start_poem_test": "Sure. We can start the poem exercise.",
-        "start_photo_test": "Done. We can start the photo exercise.",
+        "start_photo_test": "Sure. We can start the memory tour.",
         "add_routine": "Done. I added the task.",
         "edit_routine": "Done. I opened task editing.",
         "delete_routine": "Done. I opened task deletion.",
@@ -564,7 +564,7 @@ available tools instead of guessing. If records are missing, say that no synced
 record is available and ask the caregiver to sync the app.
 You may mark a synced task done, snoozed, missed, or request emergency help only
 when the patient clearly asks. You may trigger app actions for album, activities,
-photo exercises, and poem exercises. Do not directly create caregiver-owned
+gentle memory tours, and poem exercises. Do not directly create caregiver-owned
 schedules from patient voice; ask the caregiver to confirm schedule changes.
 Do not claim a task or medicine was completed unless the tool output says it is
 completed. Keep answers one sentence unless the user asks for details.
@@ -583,7 +583,7 @@ _TEXT_PLANNER_INSTRUCTIONS = (
     "task or medicine. Use decline_task when they say they did not do it. Use "
     "snooze_task when they ask to remind later. Use undo_complete_task when they say "
     "remove the done mark. Use request_help for help/emergency. Use open_album for "
-    "album/photos memories, start_photo_test for photo recognition games, and "
+    "opening album/photos memories, start_photo_test for gentle memory/photo tours with no quiz or scoring, and "
     "start_poem_test for poem/poetry exercises. Use request_add_task for adding "
     "schedule items, request_edit_task for editing, and request_delete_task for "
     "deleting. The robot opens the correct app function immediately. Do not say "

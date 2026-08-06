@@ -537,8 +537,8 @@ def _start_daemon_voice_loop(
                     speaker.speak(
                         choose_locale_text(
                             current_locale,
-                            "أي اختبار تريد؟ قل اختبار الذاكرة أو اختبار القصيدة.",
-                            "Which test do you want? Say memory test or poem test.",
+                            "أي نشاط تريد؟ قل جولة الذكريات أو تمرين القصيدة.",
+                            "Which activity do you want? Say memory tour or poem exercise.",
                         ),
                         current_locale,
                     )
@@ -680,6 +680,8 @@ def _is_actionable_followup(transcript: str) -> bool:
             "poem test",
             "poetry test",
             "start album",
+            "memory tour",
+            "album tour",
             "album test",
             "photo test",
             "memory test",

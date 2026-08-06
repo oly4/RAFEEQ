@@ -51,7 +51,7 @@ class MemoryPrompt:
 
 
 class MemoryPracticeService:
-    """Voice-driven saved album/photo memory test."""
+    """Voice-driven saved album/photo memory tour."""
 
     def __init__(
         self,
@@ -68,13 +68,14 @@ class MemoryPracticeService:
         return _extract_memory_query(transcript) is not None
 
     def handle_text(self, transcript: str, voice_input: VoiceInputAdapter) -> bool:
+        _ = voice_input
         query = _extract_memory_query(transcript)
         if query is None:
             return False
 
         locale = detect_spoken_locale(transcript)
-        memory = self._select_memory(query, locale)
-        if memory is None:
+        memories = self._load_saved_memories()
+        if not memories:
             message = choose_locale_text(
                 locale,
                 "ما لقيت ذكريات محفوظة في الألبوم.",
@@ -84,100 +85,67 @@ class MemoryPracticeService:
             self.speaker.speak(
                 choose_locale_text(
                     locale,
-                    "ما لقيت ذكريات محفوظة في الألبوم. أضف صور أو ذكريات من التطبيق، وبعدها أختبرك فيها.",
+                    "ما لقيت ذكريات محفوظة في الألبوم. أضف صور أو ذكريات من التطبيق، وبعدها أعرضها بهدوء.",
                     "I could not find saved memories in the album. Add photos or memories "
-                    "from the app, then I can test you.",
+                    "from the app, then I can show them gently.",
                 ),
                 locale,
             )
             return True
 
+        ordered_memories = self._ordered_memories_for_tour(memories, query, locale)
         action_text = choose_locale_text(
             locale,
-            f"نبدأ اختبار الذاكرة: {memory.title}.",
-            f"Starting memory test: {memory.title}.",
+            "أبشر، نبدأ جولة الذكريات. بعرض الصور وأقرأ وصفها بهدوء.",
+            "Sure. Let’s start the memory tour. I will show the photos and describe them gently.",
         )
         self._record_action(
             transcript,
             action_text,
             {
-                "memory_id": memory.id,
-                "memory_title": memory.title,
-                "media_type": memory.media_type,
+                "memory_count": len(ordered_memories),
+                "memory_titles": [memory.title for memory in ordered_memories],
             },
         )
-        if memory.media_type == "photo":
-            intro = choose_locale_text(
-                locale,
-                f"أبشر. بفتح لك صورة {memory.title} في الألبوم، وراح أسألك عنها.",
-                f"Sure. I will open the photo {memory.title} in the album and ask you about it.",
-            )
-        else:
-            intro = choose_locale_text(
-                locale,
-                f"أبشر. نبدأ اختبار ذكرى {memory.title}.",
-                f"Sure. Let's start the memory test for {memory.title}.",
-            )
-        self.speaker.speak(intro, locale)
-        prompt = memory.spoken_prompt or memory.description
-        if prompt:
-            self.speaker.speak(prompt, detect_spoken_locale(prompt))
-        self.speaker.speak(
-            choose_locale_text(
-                locale,
-                "من تتذكر في هذه الذكرى؟",
-                "Who do you remember in this memory?",
-            ),
-            locale,
-        )
-
-        for attempt in range(1, 3):
-            if attempt == 2:
-                self.speaker.speak(
-                    choose_locale_text(
-                        locale,
-                        f"تلميح: {memory.hint_for_locale(locale)}. جرّب مرة ثانية.",
-                        f"Hint: {memory.hint_for_locale(locale)}. Try one more time.",
-                    ),
-                    locale,
-                )
+        self.speaker.speak(action_text, locale)
+        for index, memory in enumerate(ordered_memories, start=1):
             _wait_until_done_speaking(self.speaker)
-            answer = voice_input.listen_text(max(6, self.settings.voice_listen_seconds))
-            if answer:
-                print(f"Memory answer attempt {attempt}: {format_console_text(answer)}")
-            else:
-                print(f"Memory answer attempt {attempt}: <no speech>")
-            matched = bool(answer and _is_matching_memory_answer(answer, memory))
-            self._record_memory_result(memory, transcript, answer or "", matched, attempt)
-            if matched:
-                self.speaker.speak(
-                    choose_locale_text(
-                        locale,
-                        "صح عليك، هذا تذكر جميل.",
-                        "Correct. That is a beautiful memory.",
-                    ),
+            narration = _memory_narration(memory, locale)
+            print(
+                "Memory tour "
+                f"{index}/{len(ordered_memories)}: {format_console_text(memory.title)}"
+            )
+            self._record_memory_tour_item(memory, transcript, narration, index)
+            self.speaker.speak(
+                choose_locale_text(
                     locale,
-                )
-                return True
-
-        expected = " أو ".join(memory.accepted_answers[:3]) or memory.title
+                    f"الصورة {index} من {len(ordered_memories)}. {narration}",
+                    f"Photo {index} of {len(ordered_memories)}. {narration}",
+                ),
+                locale,
+            )
+        _wait_until_done_speaking(self.speaker)
         self.speaker.speak(
             choose_locale_text(
                 locale,
-                f"ولا يهمك. الإجابة المتوقعة كانت: {expected}. نعيدها وقت ما تحب.",
-                f"No worries. The expected answer was: {expected}. We can try again anytime.",
+                "انتهت جولة الذكريات. نقدر نعيدها وقت ما تحب.",
+                "The memory tour is finished. We can replay it anytime.",
             ),
             locale,
         )
         return True
 
-    def _select_memory(self, query: str, locale: str) -> MemoryPrompt | None:
-        memories = self._load_saved_memories()
+    def _ordered_memories_for_tour(
+        self,
+        memories: list[MemoryPrompt],
+        query: str,
+        locale: str,
+    ) -> list[MemoryPrompt]:
         if not memories:
-            return None
+            return []
         normalized_query = _normalize_text(query)
         if not normalized_query:
-            return _first_locale_match(memories, locale) or memories[0]
+            return _locale_first_order(memories, locale)
         scored = [
             (
                 max(
@@ -200,7 +168,9 @@ class MemoryPracticeService:
             for memory in memories
         ]
         score, memory = max(scored, key=lambda item: item[0])
-        return memory if score >= 0.35 else (_first_locale_match(memories, locale) or memories[0])
+        if score < 0.35:
+            return _locale_first_order(memories, locale)
+        return [memory, *[item for item in memories if item is not memory]]
 
     def _load_saved_memories(self) -> list[MemoryPrompt]:
         device_memories = self._load_device_saved_memories()
@@ -281,23 +251,21 @@ class MemoryPracticeService:
             payload.update(extra)
         self.outbox.record("voice_app_action", payload)
 
-    def _record_memory_result(
+    def _record_memory_tour_item(
         self,
         memory: MemoryPrompt,
         transcript: str,
-        answer: str,
-        matched: bool,
-        attempt: int,
+        assistant_text: str,
+        index: int,
     ) -> None:
         self.outbox.record(
-            "voice_memory_practice",
+            "voice_memory_tour",
             {
                 "memory_id": memory.id,
                 "memory_title": memory.title,
                 "transcript": transcript,
-                "answer_transcript": answer,
-                "matched": matched,
-                "attempt": attempt,
+                "assistant_text": assistant_text,
+                "index": index,
             },
         )
 
@@ -307,9 +275,11 @@ def _extract_memory_query(transcript: str) -> str | None:
     if not normalized:
         return None
     trigger_patterns = (
+        r"(?:جوله|جولة)\s*(?:ال)?(?:ذكريات|ذاكره|ذاكرة|البوم|ألبوم|الالبوم|الصور)\s*(.*)",
         r"(?:ابد[اأ]?\s*)?(?:اختبار|تمرين)?\s*(?:ال)?(?:البوم|ألبوم|الالبوم|الصور|صوره|صورة|ذاكره|ذاكرة)\s*(.*)",
         r"(?:اختبرني|دربني)\s*(?:في|على|ب)?\s*(?:ال)?(?:البوم|ألبوم|الصور|صوره|صورة|ذاكره|ذاكرة)\s*(.*)",
-        r"(?:start|begin|run|open)\s+(?:the\s+)?(?:album|photo|picture|memory)\s*(?:test|practice)?\s*(.*)",
+        r"(?:start|begin|run|open|show)\s+(?:the\s+)?(?:album|photos|photo|pictures|picture|memories|memory)\s*(?:tour|test|practice)?\s*(.*)",
+        r"(?:memory|album|photo|picture)\s+tour\s*(.*)",
         r"(?:album|photo|picture|memory)\s+(?:test|practice|quiz)\s*(.*)",
     )
     for pattern in trigger_patterns:
@@ -334,6 +304,35 @@ def _is_matching_memory_answer(answer: str, memory: MemoryPrompt) -> bool:
         ):
             return True
     return False
+
+
+def _memory_narration(memory: MemoryPrompt, locale: str) -> str:
+    if memory.spoken_prompt.strip():
+        return memory.spoken_prompt.strip()
+    if memory.description.strip():
+        return memory.description.strip()
+    if memory.people_labels:
+        joined = choose_locale_text(
+            locale,
+            " و ".join(memory.people_labels),
+            " and ".join(memory.people_labels),
+        )
+        return choose_locale_text(
+            locale,
+            f"هذه ذكرى جميلة مع {joined}.",
+            f"This is a warm memory with {joined}.",
+        )
+    if memory.title.strip():
+        return choose_locale_text(
+            locale,
+            f"هذه ذكرى عن {memory.title}.",
+            f"This memory is about {memory.title}.",
+        )
+    return choose_locale_text(
+        locale,
+        "هذه صورة من الذكريات الجميلة.",
+        "This is a gentle memory photo.",
+    )
 
 
 def _wait_until_done_speaking(speaker: SpeakerAdapter) -> None:
@@ -373,6 +372,13 @@ def _first_locale_match(memories: list[MemoryPrompt], locale: str) -> MemoryProm
         if detect_spoken_locale(text) == locale:
             return memory
     return None
+
+
+def _locale_first_order(memories: list[MemoryPrompt], locale: str) -> list[MemoryPrompt]:
+    preferred = _first_locale_match(memories, locale)
+    if preferred is None:
+        return memories
+    return [preferred, *[memory for memory in memories if memory is not preferred]]
 
 
 def _memories_from_payload(data: object) -> list[MemoryPrompt]:

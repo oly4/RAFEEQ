@@ -278,7 +278,7 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
       case 'start_photo_test':
         _openPanel(MemoriesPanel(
           session: session,
-          startFirstPhotoTest: true,
+          startMemoryTourImmediately: true,
         ));
         break;
       default:

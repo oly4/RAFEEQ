@@ -423,9 +423,12 @@ def _openai_parse_voice_command(
             "open_album, open_settings, start_poem_test, start_photo_test, "
             "add_routine, edit_routine, delete_routine, complete_routine, "
             "undo_complete_routine, unknown. "
-            "For navigation/test commands, no confirmation is needed. "
+            "For navigation/activity commands, no confirmation is needed. "
             "If the user asks to play, start, choose, or test a poem/poetry/قصيدة, "
             "use start_poem_test. "
+            "If the user asks to start/open the album, memory, photos, or الذكريات, "
+            "use start_photo_test for a gentle memory tour that shows photos and "
+            "describes them without asking questions, scoring, or correcting the patient. "
             "Assistant text must be short spoken Arabic: calm, respectful, patient, "
             "and suitable for older adults. Use polite phrases like أبشر, حاضر, "
             "الله يعافيك, خذ راحتك. Do not use childish or overly intimate words "
@@ -435,7 +438,7 @@ def _openai_parse_voice_command(
             "Do not claim an action succeeded unless the app/backend action actually succeeds. "
             "For unknown commands, assistant_text must be exactly short and simple; "
             "do not ask detailed clarification, do not list examples, and do not "
-            "suggest poem/photo tests unless the user clearly asked for them. "
+            "suggest poem tests or memory tours unless the user clearly asked for them. "
             "For routine completion, deletion, and editing, use the provided routine "
             "context and return target_routine_id or target_occurrence_id when possible. "
             "If the user says they did/finished/took a task, use complete_routine. "
@@ -615,6 +618,45 @@ def _local_parse_voice_command(
         return {
             "action": "open_routine",
             "assistant_text": "تم، فتحت لك الروتين.",
+            "needs_confirmation": False,
+        }
+    if _contains_any(
+        normalized,
+        (
+            "جولهالذكريات",
+            "جولةالذكريات",
+            "جولة الذكريات",
+            "ابدأالذكريات",
+            "ابداالذكريات",
+            "ابدأ الذكريات",
+            "ابدا الذكريات",
+            "ابدأالالبوم",
+            "ابداالالبوم",
+            "ابدأ الالبوم",
+            "ابدا الالبوم",
+            "ابدأالصور",
+            "ابداالصور",
+            "ابدأ الصور",
+            "ابدا الصور",
+            "الذكريات",
+            "الالبوم",
+            "الصور",
+            "memorytour",
+            "memory tour",
+            "startmemory",
+            "start memory",
+            "startalbum",
+            "start album",
+            "showmemories",
+            "show memories",
+            "showalbum",
+            "show album",
+            "album",
+        ),
+    ):
+        return {
+            "action": "start_photo_test",
+            "assistant_text": "أبشر، بفتح لك جولة الذكريات.",
             "needs_confirmation": False,
         }
 
@@ -1151,7 +1193,7 @@ def _voice_action_default_text(action: str) -> str:
         "open_album": "تم، فتحت لك الألبوم.",
         "open_settings": "تم، فتحت لك الإعدادات.",
         "start_poem_test": "أبشر، بختار لك قصيدة ونتمرّن عليها بهدوء.",
-        "start_photo_test": "تم، بفتح لك اختبار الصور.",
+        "start_photo_test": "أبشر، بفتح لك جولة الذكريات.",
         "add_routine": "تم، أضفتها للروتين.",
         "edit_routine": "تم، عدّلت الروتين.",
         "delete_routine": "تم، حذفتها من الروتين.",

@@ -15,10 +15,12 @@ class MemoriesPanel extends StatefulWidget {
   const MemoriesPanel(
       {required this.session,
       this.embedded = false,
+      this.startMemoryTourImmediately = false,
       this.startFirstPhotoTest = false,
       super.key});
   final AppSession session;
   final bool embedded;
+  final bool startMemoryTourImmediately;
   final bool startFirstPhotoTest;
 
   @override
@@ -28,7 +30,7 @@ class MemoriesPanel extends StatefulWidget {
 class _MemoriesPanelState extends State<MemoriesPanel> {
   late Future<Map<String, List<Map<String, dynamic>>>> future;
   Map<String, List<Map<String, dynamic>>>? _cachedData;
-  bool _photoTestAutoStarted = false;
+  bool _memoryTourAutoStarted = false;
 
   @override
   void initState() {
@@ -40,18 +42,23 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
   @override
   void didUpdateWidget(covariant MemoriesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.startFirstPhotoTest && !oldWidget.startFirstPhotoTest) {
+    if ((widget.startMemoryTourImmediately &&
+            !oldWidget.startMemoryTourImmediately) ||
+        (widget.startFirstPhotoTest && !oldWidget.startFirstPhotoTest)) {
       _queuePhotoTestIfRequested();
     }
   }
 
   void _queuePhotoTestIfRequested() {
-    if (!widget.startFirstPhotoTest || _photoTestAutoStarted) return;
-    _photoTestAutoStarted = true;
+    if ((!widget.startMemoryTourImmediately && !widget.startFirstPhotoTest) ||
+        _memoryTourAutoStarted) {
+      return;
+    }
+    _memoryTourAutoStarted = true;
     future.then((_) {
       if (!mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _startFirstPhotoTest();
+        if (mounted) _startMemoryTourFromVoice();
       });
     });
   }
@@ -77,7 +84,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
 
   void refresh() => setState(() => future = _load());
 
-  Future<void> _startFirstPhotoTest() async {
+  Future<void> _startMemoryTourFromVoice() async {
     final data = await future;
     if (!mounted) return;
     final memories = data['memories']!;
@@ -94,7 +101,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
       );
       return;
     }
-    await _openMemorySlideshow(photoMemories);
+    await _openMemorySlideshow(photoMemories, autoPlay: true);
   }
 
   @override
@@ -970,23 +977,57 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
   Future<void> _openMemorySlideshow(
     List<Map<String, dynamic>> memories, {
     int initialIndex = 0,
+    bool autoPlay = false,
   }) async {
     if (memories.isEmpty) return;
     var currentIndex = initialIndex.clamp(0, memories.length - 1).toInt();
+    var dialogOpen = true;
+    var autoPlayRunning = false;
+    StateSetter? setSlideState;
 
     Future<void> speakCurrent() async {
       final memory = memories[currentIndex];
       await _speakOpenAiMemory(memory, _memoryNarration(memory));
     }
 
+    Future<void> playTour() async {
+      if (autoPlayRunning) return;
+      autoPlayRunning = true;
+      try {
+        var visited = 0;
+        while (dialogOpen && mounted && visited < memories.length) {
+          await speakCurrent();
+          visited++;
+          if (!autoPlay || memories.length <= 1 || visited >= memories.length) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(seconds: 2));
+          if (!dialogOpen || !mounted) break;
+          setSlideState?.call(() {
+            currentIndex = (currentIndex + 1) % memories.length;
+          });
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+        }
+      } finally {
+        autoPlayRunning = false;
+      }
+    }
+
     Future<void>.delayed(const Duration(milliseconds: 450), () {
-      if (mounted) speakCurrent();
+      if (mounted) {
+        if (autoPlay) {
+          playTour();
+        } else {
+          speakCurrent();
+        }
+      }
     });
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
+          setSlideState = setDialogState;
           final memory = memories[currentIndex];
           final imageUrl = _imageUrl(memory)!;
           final narration = _memoryNarration(memory);
@@ -1068,7 +1109,10 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
+                onPressed: () {
+                  dialogOpen = false;
+                  Navigator.pop(dialogContext);
+                },
                 child: Text(_copy(context, 'إغلاق', 'Close')),
               ),
               IconButton.filledTonal(
@@ -1105,7 +1149,7 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
           );
         },
       ),
-    );
+    ).whenComplete(() => dialogOpen = false);
   }
 
   bool _useGentleMemoryStoryMode() => true;
