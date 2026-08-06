@@ -287,6 +287,36 @@ class ReminderService:
                 )
             return statuses
 
+    def list_today_task_statuses(self) -> list[RoutineTaskStatus]:
+        now = datetime.now(timezone.utc).astimezone()
+        day_start = datetime.combine(now.date(), datetime.min.time(), tzinfo=now.tzinfo)
+        day_end = datetime.combine(now.date(), datetime.max.time(), tzinfo=now.tzinfo)
+        with self.database.session() as session:
+            occurrences = list(
+                session.scalars(
+                    select(LocalOccurrence)
+                    .where(
+                        LocalOccurrence.scheduled_at_utc >= day_start.astimezone(timezone.utc),
+                        LocalOccurrence.scheduled_at_utc <= day_end.astimezone(timezone.utc),
+                    )
+                    .order_by(LocalOccurrence.scheduled_at_utc)
+                ).all()
+            )
+            statuses: list[RoutineTaskStatus] = []
+            for occurrence in occurrences:
+                routine = session.get(LocalRoutine, occurrence.routine_id)
+                if routine is None:
+                    continue
+                statuses.append(
+                    RoutineTaskStatus(
+                        title=routine.title,
+                        routine_type=routine.type,
+                        status=occurrence.status,
+                        scheduled_at_utc=occurrence.scheduled_at_utc,
+                    )
+                )
+            return statuses
+
 
 def _normalize_text(text: str) -> str:
     normalized = text.strip().casefold()

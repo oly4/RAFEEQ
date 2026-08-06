@@ -19,6 +19,9 @@ import '../../../memories/presentation/screens/memories_panel.dart';
 import '../../../memories/presentation/screens/memory_voice_assistant_stub.dart'
     if (dart.library.html) '../../../memories/presentation/screens/memory_voice_assistant_web.dart';
 
+const _routineSpeechPiControlBaseUrl =
+    String.fromEnvironment('RAFEEQ_CAMERA_CONTROL_BASE_URL');
+
 class CaregiverHomeScreen extends ConsumerStatefulWidget {
   const CaregiverHomeScreen({super.key});
 
@@ -250,6 +253,7 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
         setState(() => index = 0);
         break;
       case 'open_routine':
+      case 'read_routine':
       case 'add_routine':
       case 'edit_routine':
       case 'delete_routine':
@@ -259,6 +263,9 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
           index = 1;
           dashboardRefreshTick++;
         });
+        if (action == 'read_routine') {
+          await _readRoutineAloud(session);
+        }
         break;
       case 'open_activities':
         setState(() => index = 2);
@@ -283,6 +290,31 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
         break;
       default:
         break;
+    }
+  }
+
+  Future<void> _readRoutineAloud(AppSession session) async {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    try {
+      final items = await _loadRoutineSpeechItems(session);
+      if (!mounted) return;
+      final message = _routineSpeechText(items, isArabic: isArabic);
+      await _queueRoutineSpeech(
+        session,
+        message,
+        locale: isArabic ? 'ar' : 'en',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_homeCopy(
+            context,
+            'تعذر قراءة الروتين الآن.',
+            'Could not read the routine right now.',
+          )),
+        ),
+      );
     }
   }
 
@@ -340,6 +372,115 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
 
   static String _homeCopy(BuildContext context, String ar, String en) =>
       Localizations.localeOf(context).languageCode == 'ar' ? ar : en;
+}
+
+Future<List<Map<String, dynamic>>> _loadRoutineSpeechItems(
+    AppSession session) async {
+  final patientId = session.currentPatient!.id;
+  final responses = await Future.wait<dynamic>([
+    session.api.dio.get<Map<String, dynamic>>('/patients/$patientId/routines'),
+    session.api.dio
+        .get<Map<String, dynamic>>('/patients/$patientId/routine-occurrences'),
+  ]);
+  final routines = responses[0] as dynamic;
+  final occurrences = responses[1] as dynamic;
+  final routineItems =
+      (routines.data!['items'] as List).cast<Map<String, dynamic>>();
+  final occurrenceItems =
+      (occurrences.data!['items'] as List).cast<Map<String, dynamic>>();
+  return routineItems.map((routine) {
+    final occurrence = occurrenceItems
+        .where((item) => item['routine_id'] == routine['id'])
+        .firstOrNull;
+    return {...routine, 'occurrence': occurrence};
+  }).toList();
+}
+
+Future<void> _queueRoutineSpeech(
+  AppSession session,
+  String text, {
+  required String locale,
+}) async {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return;
+  final dio = _routineSpeechPiControlBaseUrl.trim().isEmpty
+      ? session.api.dio
+      : Dio(BaseOptions(
+          baseUrl: _normalizedRoutineSpeechControlBaseUrl(),
+          connectTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 45),
+          headers: {
+            if (session.accessToken != null)
+              'Authorization': 'Bearer ${session.accessToken}',
+          },
+        ));
+  await dio.post<Map<String, dynamic>>(
+    '/devices/raspberry-pi/demo-speech',
+    data: {'text': trimmed, 'locale': locale},
+  );
+}
+
+String _normalizedRoutineSpeechControlBaseUrl() {
+  final trimmed = _routineSpeechPiControlBaseUrl.trim();
+  if (trimmed.endsWith('/api/v1')) return trimmed;
+  return '${trimmed.replaceAll(RegExp(r'/+$'), '')}/api/v1';
+}
+
+String _routineSpeechText(
+  List<Map<String, dynamic>> items, {
+  required bool isArabic,
+}) {
+  if (items.isEmpty) {
+    return isArabic
+        ? 'ما عندك مهام في روتين اليوم.'
+        : "You do not have any tasks in today's routine.";
+  }
+  final sorted = [...items]..sort((a, b) {
+      final left = _routineTimeText(a).compareTo(_routineTimeText(b));
+      if (left != 0) return left;
+      return (a['title']?.toString() ?? '')
+          .compareTo(b['title']?.toString() ?? '');
+    });
+  final parts = <String>[
+    isArabic ? 'روتين اليوم:' : "Today's routine:",
+  ];
+  for (var index = 0; index < sorted.length; index++) {
+    final item = sorted[index];
+    final title = item['title']?.toString().trim();
+    final time = _routineTimeText(item);
+    final status =
+        ((item['occurrence'] as Map<String, dynamic>?)?['status'] ?? 'pending')
+            .toString();
+    parts.add(isArabic
+        ? '${index + 1}. الساعة $time: ${title?.isEmpty ?? true ? 'مهمة' : title}. الحالة: ${_routineStatusText(status, isArabic: true)}.'
+        : '${index + 1}. At $time: ${title?.isEmpty ?? true ? 'task' : title}. Status: ${_routineStatusText(status, isArabic: false)}.');
+  }
+  return parts.join(' ');
+}
+
+String _routineTimeText(Map<String, dynamic> item) {
+  final raw = item['scheduled_local_time']?.toString() ?? '';
+  if (raw.length >= 5) return raw.substring(0, 5);
+  return raw.isEmpty ? '--:--' : raw;
+}
+
+String _routineStatusText(String status, {required bool isArabic}) {
+  final normalized = status.trim().toLowerCase();
+  final arabic = {
+    'pending': 'لم تنجز بعد',
+    'reminded': 'تم التذكير',
+    'snoozed': 'مؤجلة',
+    'completed': 'منجزة',
+    'missed': 'فائتة',
+  };
+  final english = {
+    'pending': 'not done yet',
+    'reminded': 'reminded',
+    'snoozed': 'snoozed',
+    'completed': 'done',
+    'missed': 'missed',
+  };
+  return (isArabic ? arabic : english)[normalized] ?? normalized;
 }
 
 class DashboardTab extends StatefulWidget {
@@ -1723,13 +1864,28 @@ class _RoutineTabState extends State<RoutineTab> {
                 );
               }
               if (index == 1) {
-                return FilledButton.icon(
-                  onPressed: _addRoutine,
-                  icon: const Icon(Icons.add_rounded),
-                  label: Text(_copy(context, 'إضافة للروتين', 'Add routine')),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                  ),
+                return Column(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _readRoutineAloud,
+                      icon: const Icon(Icons.volume_up_rounded),
+                      label:
+                          Text(_copy(context, 'قراءة الروتين', 'Read routine')),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: _addRoutine,
+                      icon: const Icon(Icons.add_rounded),
+                      label:
+                          Text(_copy(context, 'إضافة للروتين', 'Add routine')),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                    ),
+                  ],
                 );
               }
               if (items.isEmpty) {
@@ -1774,6 +1930,33 @@ class _RoutineTabState extends State<RoutineTab> {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(widget.session.api.errorMessage(error))));
       }
+    }
+  }
+
+  Future<void> _readRoutineAloud() async {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    try {
+      final items = _cachedItems ?? await future;
+      await _queueRoutineSpeech(
+        widget.session,
+        _routineSpeechText(items, isArabic: isArabic),
+        locale: isArabic ? 'ar' : 'en',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_copy(
+            context,
+            'تم إرسال الروتين للروبوت.',
+            'Routine sent to RAFEEQ.',
+          )),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.session.api.errorMessage(error))),
+      );
     }
   }
 

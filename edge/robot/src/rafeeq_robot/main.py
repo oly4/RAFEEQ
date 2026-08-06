@@ -18,7 +18,7 @@ from rafeeq_robot.application.memory_practice import MemoryPracticeService
 from rafeeq_robot.application.openai_voice_agent import OpenAIRealtimeVoiceAgent
 from rafeeq_robot.application.outbox_service import OutboxService
 from rafeeq_robot.application.poem_practice import PoemPracticeService
-from rafeeq_robot.application.reminder_service import ReminderService
+from rafeeq_robot.application.reminder_service import ReminderService, RoutineTaskStatus
 from rafeeq_robot.application.sync_service import SyncService
 from rafeeq_robot.application.voice_interactor import VoiceIntentRouter
 from rafeeq_robot.config import RobotSettings
@@ -556,6 +556,9 @@ def _start_daemon_voice_loop(
                         print("Voice intent: start_photo_test; handled=True")
                         time.sleep(0.5)
                         continue
+                if _handle_read_routine_request(transcript, reminders, speaker, current_locale):
+                    time.sleep(0.5)
+                    continue
                 if _handle_local_app_command(transcript, outbox, speaker, current_locale):
                     time.sleep(0.5)
                     continue
@@ -744,6 +747,102 @@ def _handle_local_app_command(
     speaker.speak(message, locale)
     print(f"Voice intent: {action}; handled=True")
     return True
+
+
+def _handle_read_routine_request(
+    transcript: str,
+    reminders: ReminderService,
+    speaker: SpeakerAdapter,
+    locale: str,
+) -> bool:
+    if not _looks_like_read_routine_request(transcript):
+        return False
+    statuses = reminders.list_today_task_statuses()
+    message = _routine_summary_message(statuses, locale)
+    speaker.speak(message, locale)
+    print("Voice intent: read_routine; handled=True")
+    return True
+
+
+def _looks_like_read_routine_request(transcript: str) -> bool:
+    return _contains_control_phrase(
+        transcript,
+        (
+            "what in my routine",
+            "what's in my routine",
+            "what is in my routine",
+            "what do i have in my routine",
+            "tell me my routine",
+            "read my routine",
+            "say my routine",
+            "list my routine",
+            "what is my schedule",
+            "what's my schedule",
+            "what do i have today",
+            "today routine",
+            "today's routine",
+            "routin today",
+            "rotun today",
+            "وش روتيني",
+            "وش في روتيني",
+            "ايش روتيني",
+            "ايش في روتيني",
+            "ما هو روتيني",
+            "ماذا في روتيني",
+            "اقرا الروتين",
+            "اقرأ الروتين",
+            "قل الروتين",
+            "وش جدولي",
+            "ايش جدولي",
+            "اقرا الجدول",
+            "اقرأ الجدول",
+            "مهامي اليوم",
+            "روتيني اليوم",
+            "جدولي اليوم",
+        ),
+    )
+
+
+def _routine_summary_message(statuses: list[RoutineTaskStatus], locale: str) -> str:
+    if not statuses:
+        return choose_locale_text(
+            locale,
+            "ما عندك مهام في روتين اليوم.",
+            "You do not have any tasks in today's routine.",
+        )
+    intro = choose_locale_text(locale, "روتين اليوم:", "Today's routine:")
+    parts = [intro]
+    for index, status in enumerate(statuses, start=1):
+        local_time = status.scheduled_at_utc.astimezone().strftime("%H:%M")
+        state = _spoken_status(status.status, locale)
+        parts.append(
+            choose_locale_text(
+                locale,
+                f"{index}. الساعة {local_time}: {status.title}. الحالة: {state}.",
+                f"{index}. At {local_time}: {status.title}. Status: {state}.",
+            )
+        )
+    return " ".join(parts)
+
+
+def _spoken_status(status: str, locale: str) -> str:
+    normalized = status.strip().casefold()
+    arabic = {
+        "pending": "لم تنجز بعد",
+        "reminded": "تم التذكير",
+        "snoozed": "مؤجلة",
+        "completed": "منجزة",
+        "missed": "فائتة",
+    }
+    english = {
+        "pending": "not done yet",
+        "reminded": "reminded",
+        "snoozed": "snoozed",
+        "completed": "done",
+        "missed": "missed",
+    }
+    table = english if locale == "en" else arabic
+    return table.get(normalized, normalized or ("unknown" if locale == "en" else "غير معروفة"))
 
 
 def _local_app_action(transcript: str) -> str | None:
@@ -1329,6 +1428,8 @@ def _command_loop(
             if memories.can_handle(transcript):
                 memories.handle_text(transcript, voice_input)
                 print("Voice intent: start_photo_test; handled=True")
+                continue
+            if _handle_read_routine_request(transcript, reminders, speaker, settings.voice_response_locale):
                 continue
             result = voice.handle_text(transcript, source=settings.voice_interaction_provider)
             print(f"Voice intent: {result.intent}; handled={result.handled}")

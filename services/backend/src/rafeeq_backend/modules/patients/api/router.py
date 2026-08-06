@@ -260,6 +260,7 @@ def handle_voice_command(
     allowed_actions = {
         "open_dashboard",
         "open_routine",
+        "read_routine",
         "open_activities",
         "open_album",
         "open_settings",
@@ -419,11 +420,13 @@ def _openai_parse_voice_command(
             "You are the command planner for RAFEEQ, an Arabic elder-care app. "
             "Understand clear Saudi Arabic voice commands, including common local phrasing, "
             "but keep responses in natural neutral Saudi Arabic. Return only compact JSON. "
-            "Allowed action values: open_dashboard, open_routine, open_activities, "
+            "Allowed action values: open_dashboard, open_routine, read_routine, open_activities, "
             "open_album, open_settings, start_poem_test, start_photo_test, "
             "add_routine, edit_routine, delete_routine, complete_routine, "
             "undo_complete_routine, unknown. "
             "For navigation/activity commands, no confirmation is needed. "
+            "If the user asks what is in their routine, today's routine, schedule, "
+            "or tasks, use read_routine so the app/robot reads the routine aloud. "
             "If the user asks to play, start, choose, or test a poem/poetry/قصيدة, "
             "use start_poem_test. "
             "If the user asks to start/open the album, memory, photos, or الذكريات, "
@@ -490,6 +493,8 @@ def _should_use_local_voice_parse(
     parsed_action = str(parsed.get("action") or "unknown")
     if parsed_action == "unknown" or bool(parsed.get("needs_confirmation", False)):
         return True
+    if local_action == "read_routine" and parsed_action == "open_routine":
+        return True
     return local_action in {
         "add_routine",
         "edit_routine",
@@ -499,6 +504,7 @@ def _should_use_local_voice_parse(
     } and parsed_action not in {
         "open_dashboard",
         "open_routine",
+        "read_routine",
         "open_activities",
         "open_album",
         "open_settings",
@@ -613,6 +619,46 @@ def _local_parse_voice_command(
                 "needs_confirmation": False,
                 "routine": routine,
             }
+
+    if _contains_any(
+        normalized,
+        (
+            "whatinmyroutine",
+            "whatsinmyroutine",
+            "whatisinmyroutine",
+            "whatismyroutine",
+            "whatismyschedule",
+            "whatdoihavetoday",
+            "tellmymyroutine",
+            "tellmemyroutine",
+            "readmyroutine",
+            "saymyroutine",
+            "listmyroutine",
+            "todayroutine",
+            "todaysroutine",
+            "وشروتيني",
+            "وشفيروتيني",
+            "ايشروتيني",
+            "ايشفيروتيني",
+            "ماهوروتيني",
+            "ماذافيروتيني",
+            "اقراالروتين",
+            "اقرأالروتين",
+            "قلالروتين",
+            "وشجدولي",
+            "ايشجدولي",
+            "اقراالجدول",
+            "اقرأالجدول",
+            "مهامياليوم",
+            "روتينياليوم",
+            "جدولياليوم",
+        ),
+    ):
+        return {
+            "action": "read_routine",
+            "assistant_text": "أبشر، بقرأ لك روتين اليوم.",
+            "needs_confirmation": False,
+        }
 
     if _contains_any(normalized, ("روتين", "المهام", "المهاماليوم", "routine")):
         return {
@@ -1189,6 +1235,7 @@ def _voice_action_default_text(action: str) -> str:
     return {
         "open_dashboard": "تم، فتحت لك الرئيسية.",
         "open_routine": "تم، فتحت لك الروتين.",
+        "read_routine": "أبشر، بقرأ لك روتين اليوم.",
         "open_activities": "تم، فتحت لك النشاط.",
         "open_album": "تم، فتحت لك الألبوم.",
         "open_settings": "تم، فتحت لك الإعدادات.",

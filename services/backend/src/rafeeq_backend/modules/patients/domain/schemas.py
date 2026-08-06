@@ -113,6 +113,7 @@ class VoiceCommandResponse(BaseModel):
     action: Literal[
         "open_dashboard",
         "open_routine",
+        "read_routine",
         "open_activities",
         "open_album",
         "open_settings",
