@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
@@ -28,9 +29,14 @@ class MemoriesPanel extends StatefulWidget {
 }
 
 class _MemoriesPanelState extends State<MemoriesPanel> {
+  static const _piControlBaseUrl =
+      String.fromEnvironment('RAFEEQ_CAMERA_CONTROL_BASE_URL');
+
   late Future<Map<String, List<Map<String, dynamic>>>> future;
   Map<String, List<Map<String, dynamic>>>? _cachedData;
   bool _memoryTourAutoStarted = false;
+
+  bool get _isArabic => Localizations.localeOf(context).languageCode == 'ar';
 
   @override
   void initState() {
@@ -985,9 +991,11 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
     var autoPlayRunning = false;
     StateSetter? setSlideState;
 
-    Future<void> speakCurrent() async {
+    Future<int> speakCurrent() async {
       final memory = memories[currentIndex];
-      await _speakOpenAiMemory(memory, _memoryNarration(memory));
+      final narration = _memoryNarration(memory);
+      await _speakOpenAiMemory(memory, narration);
+      return _estimatedNarrationSeconds(narration);
     }
 
     Future<void> playTour() async {
@@ -996,12 +1004,12 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
       try {
         var visited = 0;
         while (dialogOpen && mounted && visited < memories.length) {
-          await speakCurrent();
+          final narrationSeconds = await speakCurrent();
           visited++;
           if (!autoPlay || memories.length <= 1 || visited >= memories.length) {
             break;
           }
-          await Future<void>.delayed(const Duration(seconds: 2));
+          await Future<void>.delayed(Duration(seconds: narrationSeconds));
           if (!dialogOpen || !mounted) break;
           setSlideState?.call(() {
             currentIndex = (currentIndex + 1) % memories.length;
@@ -1253,6 +1261,9 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
 
   Future<void> _speakOpenAiMemory(
       Map<String, dynamic> memory, String text) async {
+    if (await _queueRobotMemorySpeech(text)) {
+      return;
+    }
     try {
       final patientId = widget.session.currentPatient!.id;
       final response = await widget.session.api.dio.post<Map<String, dynamic>>(
@@ -1268,6 +1279,45 @@ class _MemoriesPanelState extends State<MemoriesPanel> {
       // Browser speech is a soft fallback when OpenAI audio is unavailable.
     }
     await speakMemoryText(text);
+  }
+
+  Future<bool> _queueRobotMemorySpeech(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || _piControlBaseUrl.trim().isEmpty) return false;
+    try {
+      await _piControlDio().post<Map<String, dynamic>>(
+        '/devices/raspberry-pi/demo-speech',
+        data: {
+          'text': trimmed,
+          'locale': _isArabic ? 'ar' : 'en',
+        },
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Dio _piControlDio() => Dio(BaseOptions(
+        baseUrl: _normalizedPiControlBaseUrl(),
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 45),
+        headers: {
+          if (widget.session.accessToken != null)
+            'Authorization': 'Bearer ${widget.session.accessToken}',
+        },
+      ));
+
+  String _normalizedPiControlBaseUrl() {
+    final trimmed = _piControlBaseUrl.trim();
+    if (trimmed.endsWith('/api/v1')) return trimmed;
+    return '${trimmed.replaceAll(RegExp(r'/+$'), '')}/api/v1';
+  }
+
+  int _estimatedNarrationSeconds(String text) {
+    final clean = text.trim();
+    if (clean.isEmpty) return 3;
+    return (clean.length / 12).ceil().clamp(4, 16);
   }
 
   Future<String?> _textDialog(
