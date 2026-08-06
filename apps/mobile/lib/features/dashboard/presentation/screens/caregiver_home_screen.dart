@@ -2260,8 +2260,7 @@ class _RoutineItemCard extends StatelessWidget {
               children: [
                 Text(
                   item['title'].toString(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
@@ -2271,34 +2270,41 @@ class _RoutineItemCard extends StatelessWidget {
                 Text(
                   '${localizedClockTime(context, item['scheduled_local_time'])} • '
                   '${localizedStatus(strings, occurrence?['status'] ?? 'pending')}',
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: complete
+                      ? IconButton.filledTonal(
+                          tooltip: _RoutineTabState._copy(
+                              context, 'إزالة علامة تم', 'Mark not done'),
+                          onPressed: onUndoComplete,
+                          icon: const Icon(
+                            Icons.check_circle_outline_rounded,
+                            color: RafeeqColors.success,
+                          ),
+                        )
+                      : occurrence == null
+                          ? const Icon(Icons.circle_outlined,
+                              color: RafeeqColors.outline, size: 29)
+                          : ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 150),
+                              child: FilledButton.tonal(
+                                onPressed: onComplete,
+                                child: Text(
+                                  strings.complete,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          if (complete)
-            IconButton.filledTonal(
-              tooltip: _RoutineTabState._copy(
-                  context, 'إزالة علامة تم', 'Mark not done'),
-              onPressed: onUndoComplete,
-              icon: const Icon(
-                Icons.check_circle_outline_rounded,
-                color: RafeeqColors.success,
-              ),
-            )
-          else if (occurrence == null)
-            const Icon(Icons.circle_outlined,
-                color: RafeeqColors.outline, size: 29)
-          else
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 118),
-              child: FilledButton.tonal(
-                onPressed: onComplete,
-                child: FittedBox(child: Text(strings.complete)),
-              ),
-            ),
+          const SizedBox(width: 4),
           PopupMenuButton<String>(
             tooltip: _RoutineTabState._copy(context, 'خيارات', 'Options'),
             onSelected: (value) {
