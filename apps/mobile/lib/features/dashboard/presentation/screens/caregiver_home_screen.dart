@@ -3582,7 +3582,10 @@ class _RobotSpeechDemoSettingsSectionState
                     onPressed: _busy
                         ? null
                         : () => _sendSpeech(
-                              'Mohammed, I want to remind you that you have an appointment after 5 minutes.',
+                              "Thank you! But no need for all that applause. I'm just happy to help!\n\n"
+                              "Good job, team! And thank you to all the groups for your great work and support. "
+                              "Every team did an amazing job, but our winner truly deserves this moment!\n\n"
+                              "You've heard about me... now come and meet me! Let's take a closer look at the RAFEEQ prototype.",
                               locale: 'en',
                             ),
                     icon: const Icon(Icons.event_available_rounded),
@@ -3678,8 +3681,9 @@ class _RobotSpeechDemoSettingsSectionState
   String _speechError(Object error) {
     if (error is DioException) {
       final data = error.response?.data;
-      if (data is Map && data['detail'] != null)
+      if (data is Map && data['detail'] != null) {
         return data['detail'].toString();
+      }
       if (data is Map && data['error'] is Map) {
         final message = (data['error'] as Map)['message'];
         if (message != null) return message.toString();
@@ -3836,7 +3840,7 @@ class _RaspberryPiNetworkPanelState extends State<RaspberryPiNetworkPanel> {
                 const SizedBox(height: 12),
                 if (_networks.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
-                    value: _ssidController.text.isEmpty
+                    initialValue: _ssidController.text.isEmpty
                         ? null
                         : _ssidController.text,
                     decoration: InputDecoration(
