@@ -569,6 +569,9 @@ def _start_daemon_voice_loop(
                 if _handle_read_routine_request(transcript, reminders, speaker, current_locale):
                     time.sleep(0.5)
                     continue
+                if _handle_speaker_volume_request(transcript, outbox, speaker, current_locale):
+                    time.sleep(0.5)
+                    continue
                 if _handle_local_app_command(transcript, outbox, speaker, current_locale):
                     time.sleep(0.5)
                     continue
@@ -772,6 +775,180 @@ def _handle_read_routine_request(
     speaker.speak(message, locale)
     print("Voice intent: read_routine; handled=True")
     return True
+
+
+def _handle_speaker_volume_request(
+    transcript: str,
+    outbox: OutboxService,
+    speaker: SpeakerAdapter,
+    locale: str,
+) -> bool:
+    if not _looks_like_speaker_volume_request(transcript):
+        return False
+    try:
+        status = _speaker_volume_status()
+    except Exception as exc:
+        message = choose_locale_text(
+            locale,
+            "تحكم صوت السماعة غير جاهز الآن.",
+            "Speaker volume control is not ready right now.",
+        )
+        speaker.speak(message, locale)
+        print(f"Voice intent: speaker_volume; handled=False; error={exc}")
+        return True
+    current = status.get("volume_percent")
+    target = _speaker_volume_target(transcript, current)
+    if target is None:
+        message = choose_locale_text(
+            locale,
+            "قل مستوى الصوت من صفر إلى مئة، أو قل ارفع الصوت أو خفّض الصوت.",
+            "Say a speaker volume from zero to one hundred, or say raise or lower the volume.",
+        )
+        speaker.speak(message, locale)
+        print("Voice intent: speaker_volume; handled=False")
+        return True
+    try:
+        updated = _set_speaker_volume(target)
+    except Exception as exc:
+        message = choose_locale_text(
+            locale,
+            "ما قدرت أغيّر صوت السماعة الآن.",
+            "I could not change the speaker volume right now.",
+        )
+        speaker.speak(message, locale)
+        print(f"Voice intent: speaker_volume; handled=False; error={exc}")
+        return True
+    actual = updated.get("volume_percent")
+    spoken_level = actual if isinstance(actual, int) else target
+    message = choose_locale_text(
+        locale,
+        f"تم، ضبطت صوت السماعة على {spoken_level} بالمئة.",
+        f"Done. I set the speaker volume to {spoken_level} percent.",
+    )
+    outbox.record(
+        "voice_speaker_volume_changed",
+        {
+            "transcript": transcript,
+            "volume_percent": spoken_level,
+            "used_openai": False,
+        },
+    )
+    speaker.speak(message, locale)
+    print(f"Voice intent: speaker_volume; handled=True; volume={spoken_level}")
+    return True
+
+
+def _looks_like_speaker_volume_request(transcript: str) -> bool:
+    normalized = _normalize_wake_text(transcript)
+    has_audio_word = _contains_control_phrase(
+        normalized,
+        (
+            "volume",
+            "speaker",
+            "sound",
+            "voice",
+            "louder",
+            "quieter",
+            "صوت",
+            "صوتك",
+            "السماعه",
+            "السماعة",
+        ),
+    )
+    if not has_audio_word:
+        return False
+    has_volume_action = _contains_control_phrase(
+        normalized,
+        (
+            "set",
+            "change",
+            "make",
+            "raise",
+            "increase",
+            "up",
+            "louder",
+            "lower",
+            "decrease",
+            "down",
+            "quieter",
+            "mute",
+            "ارفع",
+            "زود",
+            "اعلى",
+            "أعلى",
+            "خفض",
+            "خفّض",
+            "وطي",
+            "اقل",
+            "أقل",
+            "اسكت",
+            "كتم",
+        ),
+    )
+    has_number = re.search(r"\d{1,3}\s*(?:%|percent|بالمئه|بالمئة)?", normalized) is not None
+    return has_volume_action or has_number
+
+
+def _speaker_volume_target(transcript: str, current: object) -> int | None:
+    normalized = _normalize_wake_text(transcript)
+    match = re.search(r"(\d{1,3})\s*(?:%|percent|بالمئه|بالمئة)?", normalized)
+    if match:
+        return max(0, min(100, int(match.group(1))))
+    base = current if isinstance(current, int) else 50
+    if _contains_control_phrase(normalized, ("mute", "كتم", "اسكت")):
+        return 0
+    if _contains_control_phrase(normalized, ("max", "full", "اعلى", "أعلى")):
+        return 100
+    if _contains_control_phrase(
+        normalized,
+        ("raise", "increase", "up", "louder", "ارفع", "زود"),
+    ):
+        return max(0, min(100, base + 10))
+    if _contains_control_phrase(
+        normalized,
+        ("lower", "decrease", "down", "quieter", "خفض", "خفّض", "وطي", "اقل", "أقل"),
+    ):
+        return max(0, min(100, base - 10))
+    return None
+
+
+def _speaker_volume_status() -> dict[str, object]:
+    return _run_speaker_control("status")
+
+
+def _set_speaker_volume(volume_percent: int) -> dict[str, object]:
+    return _run_speaker_control("set", {"volume_percent": volume_percent})
+
+
+def _run_speaker_control(
+    action: str,
+    payload: dict[str, int] | None = None,
+) -> dict[str, object]:
+    helper = _speaker_control_helper()
+    result = subprocess.run(
+        ["sudo", "-n", str(helper), action],
+        check=False,
+        capture_output=True,
+        input=json.dumps(payload or {}),
+        text=True,
+        timeout=15,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "speaker control failed").strip()
+        raise RuntimeError(detail)
+    data = json.loads(result.stdout)
+    return data if isinstance(data, dict) else {}
+
+
+def _speaker_control_helper() -> Path:
+    candidates = [
+        Path("/opt/rafeeq/scripts/rafeeq_speaker_control.py"),
+        Path(__file__).resolve().parents[4] / "scripts" / "rafeeq_speaker_control.py",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _looks_like_read_routine_request(transcript: str) -> bool:
@@ -1434,6 +1611,13 @@ def _command_loop(
                 memories.handle_text(transcript, voice_input)
                 print("Voice intent: start_photo_test; handled=True")
                 continue
+            if _handle_speaker_volume_request(
+                transcript,
+                outbox,
+                speaker,
+                settings.voice_response_locale,
+            ):
+                continue
             result = voice.handle_text(transcript)
             print(f"Voice intent: {result.intent}; handled={result.handled}")
         elif command.startswith("listen"):
@@ -1459,6 +1643,13 @@ def _command_loop(
                 print("Voice intent: start_photo_test; handled=True")
                 continue
             if _handle_read_routine_request(transcript, reminders, speaker, settings.voice_response_locale):
+                continue
+            if _handle_speaker_volume_request(
+                transcript,
+                outbox,
+                speaker,
+                settings.voice_response_locale,
+            ):
                 continue
             result = voice.handle_text(transcript, source=settings.voice_interaction_provider)
             print(f"Voice intent: {result.intent}; handled={result.handled}")
