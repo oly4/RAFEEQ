@@ -1095,6 +1095,8 @@ class _PatientSummaryCardState extends State<_PatientSummaryCard> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
     final summary = _summaryLine(context, widget.careProfile);
     final items = <({IconData icon, String label, String? value})>[
       (
@@ -1206,9 +1208,13 @@ class _PatientSummaryCardState extends State<_PatientSummaryCard> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: RafeeqColors.lavenderSoft,
+                      gradient: RafeeqGradients.softCardFor(brightness),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: RafeeqColors.outline),
+                      border: Border.all(
+                        color: isDark
+                            ? RafeeqColors.outlineDark
+                            : RafeeqColors.outline,
+                      ),
                     ),
                     child: visibleItems.isEmpty
                         ? Row(children: [
