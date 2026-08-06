@@ -43,6 +43,8 @@ services:
       MQTT_PORT: 1883
     ports:
       - "8000:8000"
+    volumes:
+      - ./data/uploads:/usr/local/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
