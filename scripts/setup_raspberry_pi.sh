@@ -135,6 +135,8 @@ CAMERA_SERVICE_NAME=rafeeq-camera
 NETWORK_CONTROL_ENABLED=true
 NETWORK_CONTROL_ADMIN_PIN=${network_pin}
 NETWORK_CONTROL_HELPER=${INSTALL_DIR}/scripts/rafeeq_network_control.py
+SPEAKER_CONTROL_ENABLED=true
+SPEAKER_CONTROL_HELPER=${INSTALL_DIR}/scripts/rafeeq_speaker_control.py
 EOF
   chmod 640 /etc/rafeeq/backend.env
   chown root:"$SERVICE_USER" /etc/rafeeq/backend.env
@@ -241,6 +243,13 @@ ${SERVICE_USER} ALL=(root) NOPASSWD: ${INSTALL_DIR}/scripts/rafeeq_network_contr
 EOF
   chmod 440 /etc/sudoers.d/rafeeq-network-control
   visudo -cf /etc/sudoers.d/rafeeq-network-control >/dev/null
+
+  chmod 755 "$INSTALL_DIR/scripts/rafeeq_speaker_control.py"
+  cat >/etc/sudoers.d/rafeeq-speaker-control <<EOF
+${SERVICE_USER} ALL=(root) NOPASSWD: ${INSTALL_DIR}/scripts/rafeeq_speaker_control.py status, ${INSTALL_DIR}/scripts/rafeeq_speaker_control.py set, ${INSTALL_DIR}/scripts/rafeeq_speaker_control.py test
+EOF
+  chmod 440 /etc/sudoers.d/rafeeq-speaker-control
+  visudo -cf /etc/sudoers.d/rafeeq-speaker-control >/dev/null
 }
 
 install_services() {

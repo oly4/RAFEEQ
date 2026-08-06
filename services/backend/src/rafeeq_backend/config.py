@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     network_control_enabled: bool = False
     network_control_admin_pin: SecretStr | None = None
     network_control_helper: str = "/opt/rafeeq/scripts/rafeeq_network_control.py"
+    speaker_control_enabled: bool = False
+    speaker_control_helper: str = "/opt/rafeeq/scripts/rafeeq_speaker_control.py"
 
     model_config = SettingsConfigDict(env_file=(ROOT_ENV, ROBOT_ENV), extra="ignore")
 

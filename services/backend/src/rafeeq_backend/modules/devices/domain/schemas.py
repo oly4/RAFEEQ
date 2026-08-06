@@ -57,6 +57,17 @@ class WifiConnectRequest(BaseModel):
     admin_pin: str
 
 
+class SpeakerVolumeRequest(BaseModel):
+    volume_percent: int = Field(ge=0, le=100)
+
+
+class SpeakerVolumeStatus(BaseModel):
+    enabled: bool
+    volume_percent: int | None = None
+    muted: bool = False
+    message: str | None = None
+
+
 class RobotSpeechDemoRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
     locale: str = Field(default="en", max_length=8)

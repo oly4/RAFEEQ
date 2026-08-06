@@ -3547,6 +3547,7 @@ class SettingsTab extends StatelessWidget {
         onTap: () => _openPanel(context, const CameraTestScreen()),
       ),
       RobotSpeechDemoSettingsSection(session: session),
+      SpeakerVolumeSettingsSection(session: session),
       const SizedBox(height: 12),
       _settingsCard(
         context,
@@ -3698,6 +3699,222 @@ class SettingsTab extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => panel),
     );
+  }
+}
+
+class SpeakerVolumeSettingsSection extends StatefulWidget {
+  const SpeakerVolumeSettingsSection({required this.session, super.key});
+  final AppSession session;
+
+  @override
+  State<SpeakerVolumeSettingsSection> createState() =>
+      _SpeakerVolumeSettingsSectionState();
+}
+
+class _SpeakerVolumeSettingsSectionState
+    extends State<SpeakerVolumeSettingsSection> {
+  static const _piControlBaseUrl =
+      String.fromEnvironment('RAFEEQ_CAMERA_CONTROL_BASE_URL');
+
+  double _volume = 50;
+  bool _busy = false;
+  String? _message;
+  String? _error;
+
+  bool get _isArabic => Localizations.localeOf(context).languageCode == 'ar';
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_loadVolume);
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: RafeeqGlowCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const CircleAvatar(
+                  backgroundColor: RafeeqColors.lavender,
+                  child: Icon(Icons.volume_up_rounded,
+                      color: RafeeqColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isArabic
+                            ? 'صوت سماعة الرازبيري'
+                            : 'Raspberry Pi speaker volume',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        _isArabic
+                            ? 'ارفع أو خفّض صوت رفيق من هنا'
+                            : 'Raise or lower RAFEEQ speaker volume',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                if (_busy)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: [
+                const Icon(Icons.volume_down_rounded),
+                Expanded(
+                  child: Slider(
+                    value: _volume,
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    label: '${_volume.round()}%',
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() => _volume = value),
+                    onChangeEnd: _busy ? null : (_) => _saveVolume(),
+                  ),
+                ),
+                const Icon(Icons.volume_up_rounded),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    '${_volume.round()}%',
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ]),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _loadVolume,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: Text(_isArabic ? 'تحديث' : 'Refresh'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _busy ? null : _saveVolume,
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(_isArabic ? 'حفظ الصوت' : 'Save volume'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _busy ? null : _testSpeaker,
+                    icon: const Icon(Icons.graphic_eq_rounded),
+                    label: Text(_isArabic ? 'اختبار السماعة' : 'Test speaker'),
+                  ),
+                ],
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _message!,
+                  style: const TextStyle(color: RafeeqColors.success),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+
+  Future<void> _loadVolume() async {
+    await _speakerRequest('GET', '/devices/raspberry-pi/speaker');
+  }
+
+  Future<void> _saveVolume() async {
+    await _speakerRequest(
+      'POST',
+      '/devices/raspberry-pi/speaker',
+      data: {'volume_percent': _volume.round()},
+    );
+  }
+
+  Future<void> _testSpeaker() async {
+    await _speakerRequest('POST', '/devices/raspberry-pi/speaker/test');
+  }
+
+  Future<void> _speakerRequest(
+    String method,
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      final response = method == 'POST'
+          ? await _dio().post<Map<String, dynamic>>(path, data: data)
+          : await _dio().get<Map<String, dynamic>>(path);
+      final payload = response.data ?? const <String, dynamic>{};
+      final value = (payload['volume_percent'] as num?)?.toDouble();
+      if (!mounted) return;
+      setState(() {
+        if (value != null) _volume = value.clamp(0, 100).toDouble();
+        _message = payload['message']?.toString() ??
+            (_isArabic ? 'تم تحديث الصوت.' : 'Speaker volume updated.');
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _speakerError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Dio _dio() {
+    if (_piControlBaseUrl.trim().isEmpty) return widget.session.api.dio;
+    return Dio(BaseOptions(
+      baseUrl: _normalizedPiControlBaseUrl(),
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {
+        if (widget.session.accessToken != null)
+          'Authorization': 'Bearer ${widget.session.accessToken}',
+      },
+    ));
+  }
+
+  String _normalizedPiControlBaseUrl() {
+    final trimmed = _piControlBaseUrl.trim();
+    if (trimmed.endsWith('/api/v1')) return trimmed;
+    return '${trimmed.replaceAll(RegExp(r'/+$'), '')}/api/v1';
+  }
+
+  String _speakerError(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['detail'] != null) {
+        return data['detail'].toString();
+      }
+      if (data is Map && data['error'] is Map) {
+        final message = (data['error'] as Map)['message'];
+        if (message != null) return message.toString();
+      }
+    }
+    return _isArabic
+        ? 'تعذر التحكم بصوت سماعة الرازبيري الآن.'
+        : 'Could not control the Raspberry Pi speaker right now.';
   }
 }
 

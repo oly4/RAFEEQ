@@ -24,6 +24,8 @@ from rafeeq_backend.modules.devices.domain.schemas import (
     RaspberryPiNetworkStatus,
     RobotSpeechDemoRequest,
     RobotSpeechDemoResponse,
+    SpeakerVolumeRequest,
+    SpeakerVolumeStatus,
     WifiConnectRequest,
 )
 from rafeeq_backend.modules.patients.application.policies import (
@@ -116,10 +118,22 @@ def _require_network_control_enabled() -> None:
         raise HTTPException(status_code=404, detail="Network control is not enabled")
 
 
+def _require_speaker_control_enabled() -> None:
+    if not get_settings().speaker_control_enabled:
+        raise HTTPException(status_code=404, detail="Speaker control is not enabled")
+
+
 def _network_helper_path() -> str:
     helper = get_settings().network_control_helper.strip()
     if not helper.startswith("/opt/rafeeq/") or not helper.endswith(".py"):
         raise HTTPException(status_code=500, detail="Invalid network helper configuration")
+    return helper
+
+
+def _speaker_helper_path() -> str:
+    helper = get_settings().speaker_control_helper.strip()
+    if not helper.startswith("/opt/rafeeq/") or not helper.endswith(".py"):
+        raise HTTPException(status_code=500, detail="Invalid speaker helper configuration")
     return helper
 
 
@@ -156,6 +170,36 @@ def _run_network_helper(
         message=data.get("message"),
         **{key: value for key, value in data.items() if key != "message"},
     )
+
+
+def _run_speaker_helper(
+    action: str,
+    payload: dict[str, int] | None = None,
+) -> SpeakerVolumeStatus:
+    _require_speaker_control_enabled()
+    if action not in {"status", "set", "test"}:
+        raise HTTPException(status_code=500, detail="Invalid speaker command")
+    helper = _speaker_helper_path()
+    command = ["sudo", "-n", helper, action]
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            input=json.dumps(payload or {}),
+            text=True,
+            timeout=15,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(status_code=504, detail="Speaker command timed out") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "Speaker command failed").strip()
+        raise HTTPException(status_code=503, detail=detail)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=503, detail="Invalid speaker helper output") from exc
+    return SpeakerVolumeStatus(**data)
 
 
 def _require_network_admin_pin(admin_pin: str) -> None:
@@ -274,6 +318,35 @@ def connect_raspberry_pi_wifi(request: WifiConnectRequest) -> RaspberryPiNetwork
         "connect",
         {"ssid": request.ssid, "password": request.password},
     )
+
+
+@router.get(
+    "/devices/raspberry-pi/speaker",
+    response_model=SpeakerVolumeStatus,
+)
+def get_raspberry_pi_speaker_volume() -> SpeakerVolumeStatus:
+    return _run_speaker_helper("status")
+
+
+@router.post(
+    "/devices/raspberry-pi/speaker",
+    response_model=SpeakerVolumeStatus,
+)
+def set_raspberry_pi_speaker_volume(
+    request: SpeakerVolumeRequest,
+) -> SpeakerVolumeStatus:
+    return _run_speaker_helper(
+        "set",
+        {"volume_percent": request.volume_percent},
+    )
+
+
+@router.post(
+    "/devices/raspberry-pi/speaker/test",
+    response_model=SpeakerVolumeStatus,
+)
+def test_raspberry_pi_speaker() -> SpeakerVolumeStatus:
+    return _run_speaker_helper("test")
 
 
 @router.post(
