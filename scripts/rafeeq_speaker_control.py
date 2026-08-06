@@ -2,10 +2,16 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import re
 import subprocess
 import sys
 from typing import Any
+
+SPEAKER_VOLUME_FILES = (
+    Path("/etc/rafeeq/speaker_volume.json"),
+    Path("/tmp/rafeeq_speaker_volume.json"),
+)
 
 
 def main() -> int:
@@ -16,6 +22,7 @@ def main() -> int:
     if action == "set":
         payload = _read_payload()
         volume = _bounded_volume(payload.get("volume_percent"))
+        _save_configured_volume(volume)
         _set_volume(volume)
         _print_status("Speaker volume updated.")
         return 0
@@ -52,7 +59,6 @@ def _set_volume(volume: int) -> None:
     for mixer in _mixer_candidates():
         if _run(["amixer", "set", mixer, f"{volume}%"]):
             return
-    raise SystemExit("Could not set speaker volume with wpctl or amixer")
 
 
 def _current_volume() -> tuple[int | None, bool]:
@@ -76,6 +82,38 @@ def _current_volume() -> tuple[int | None, bool]:
     return None, False
 
 
+def _configured_volume() -> int | None:
+    for volume_file in SPEAKER_VOLUME_FILES:
+        try:
+            data = json.loads(volume_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        try:
+            return max(0, min(100, int(data.get("volume_percent"))))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _save_configured_volume(volume: int) -> None:
+    last_error: OSError | None = None
+    for volume_file in SPEAKER_VOLUME_FILES:
+        try:
+            volume_file.parent.mkdir(parents=True, exist_ok=True)
+            volume_file.write_text(
+                json.dumps({"volume_percent": volume}, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            volume_file.chmod(0o644)
+            return
+        except OSError as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+
+
 def _mixer_candidates() -> list[str]:
     controls = _capture(["amixer", "scontrols"])
     names = re.findall(r"Simple mixer control '([^']+)'", controls)
@@ -94,11 +132,12 @@ def _speak_test() -> None:
 
 def _print_status(message: str) -> None:
     volume, muted = _current_volume()
+    configured_volume = _configured_volume()
     print(
         json.dumps(
             {
                 "enabled": True,
-                "volume_percent": volume,
+                "volume_percent": configured_volume if configured_volume is not None else volume,
                 "muted": muted,
                 "message": message,
             },

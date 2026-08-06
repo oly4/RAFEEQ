@@ -4,6 +4,7 @@ import argparse
 import array
 import hmac
 import io
+import json
 import os
 import subprocess
 import sys
@@ -40,6 +41,10 @@ POSE_MODEL_URL = (
 POSE_MODEL_SHA256 = "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
 ROBOT_VOICE_MIC_RESERVE_FILE = Path("/tmp/rafeeq-runtime/voice_mic_reserved")
 CAMERA_READY_FILE_ENV = "RAFEEQ_CAMERA_READY_FILE"
+SPEAKER_VOLUME_FILES = (
+    Path("/etc/rafeeq/speaker_volume.json"),
+    Path("/tmp/rafeeq_speaker_volume.json"),
+)
 Detector = Any
 CONNECTIONS = (
     (11, 12),
@@ -280,7 +285,7 @@ class EspeakFallSpeaker:
                 reason = result.stderr.decode("utf-8", errors="replace").strip()
                 _safe_print(f"Fall TTS generation failed: {reason}")
                 return
-            subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
+            _play_wav(Path(wav_file.name).read_bytes(), self.output_device)
 
 
 def _create_fall_speaker(kind: str, settings: RobotSettings) -> Any:
@@ -1108,7 +1113,53 @@ def _classify_fall_response(transcript: str) -> str:
     return "timeout"
 
 
+def _configured_speaker_volume_percent() -> int:
+    for volume_file in SPEAKER_VOLUME_FILES:
+        try:
+            data = json.loads(volume_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        try:
+            return max(0, min(100, int(data.get("volume_percent"))))
+        except (TypeError, ValueError):
+            continue
+    return 100
+
+
+def _apply_configured_speaker_volume(wav_bytes: bytes) -> bytes:
+    volume = _configured_speaker_volume_percent()
+    if volume >= 99:
+        return wav_bytes
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+            params = wav_file.getparams()
+            if wav_file.getcomptype() != "NONE" or wav_file.getsampwidth() != 2:
+                return wav_bytes
+            frames = wav_file.readframes(wav_file.getnframes())
+
+        samples = array.array("h")
+        samples.frombytes(frames)
+        if sys.byteorder == "big":
+            samples.byteswap()
+        factor = volume / 100.0
+        for index, sample in enumerate(samples):
+            samples[index] = max(-32768, min(32767, round(sample * factor)))
+        if sys.byteorder == "big":
+            samples.byteswap()
+
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav_file:
+            wav_file.setparams(params)
+            wav_file.writeframes(samples.tobytes())
+        return output.getvalue()
+    except Exception:
+        return wav_bytes
+
+
 def _play_wav(wav_bytes: bytes, output_device: int | str | None) -> None:
+    wav_bytes = _apply_configured_speaker_volume(wav_bytes)
     if sys.platform != "win32":
         device = str(output_device or "plughw:0,0")
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as audio_file:

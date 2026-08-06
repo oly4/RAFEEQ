@@ -1,3 +1,5 @@
+import array
+import io
 import json
 import re
 import shlex
@@ -6,6 +8,7 @@ import sys
 import time
 import tempfile
 import threading
+import wave
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -40,6 +43,10 @@ from rafeeq_robot.transport.http_client import create_device_client
 VOICE_PAUSE_FILE = Path("/tmp/rafeeq_voice_paused")
 VOICE_MIC_RESERVED_FILE = Path("/tmp/rafeeq-runtime/voice_mic_reserved")
 VOICE_COMMAND_DIR = Path("/tmp/rafeeq-runtime/voice-commands")
+SPEAKER_VOLUME_FILES = (
+    Path("/etc/rafeeq/speaker_volume.json"),
+    Path("/tmp/rafeeq_speaker_volume.json"),
+)
 
 
 def main() -> None:
@@ -951,6 +958,51 @@ def _speaker_control_helper() -> Path:
     return candidates[0]
 
 
+def _configured_speaker_volume_percent() -> int:
+    for volume_file in SPEAKER_VOLUME_FILES:
+        try:
+            data = json.loads(volume_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        try:
+            return max(0, min(100, int(data.get("volume_percent"))))
+        except (TypeError, ValueError):
+            continue
+    return 100
+
+
+def _apply_configured_speaker_volume(wav_bytes: bytes) -> bytes:
+    volume = _configured_speaker_volume_percent()
+    if volume >= 99:
+        return wav_bytes
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wav_file:
+            params = wav_file.getparams()
+            if wav_file.getcomptype() != "NONE" or wav_file.getsampwidth() != 2:
+                return wav_bytes
+            frames = wav_file.readframes(wav_file.getnframes())
+
+        samples = array.array("h")
+        samples.frombytes(frames)
+        if sys.byteorder == "big":
+            samples.byteswap()
+        factor = volume / 100.0
+        for index, sample in enumerate(samples):
+            samples[index] = max(-32768, min(32767, round(sample * factor)))
+        if sys.byteorder == "big":
+            samples.byteswap()
+
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav_file:
+            wav_file.setparams(params)
+            wav_file.writeframes(samples.tobytes())
+        return output.getvalue()
+    except Exception:
+        return wav_bytes
+
+
 def _looks_like_read_routine_request(transcript: str) -> bool:
     return _contains_control_phrase(
         transcript,
@@ -1837,6 +1889,12 @@ class EspeakSpeaker:
                     stderr=subprocess.PIPE,
                 )
                 if result.returncode == 0:
+                    wav_file.seek(0)
+                    wav_bytes = _apply_configured_speaker_volume(wav_file.read())
+                    wav_file.seek(0)
+                    wav_file.truncate()
+                    wav_file.write(wav_bytes)
+                    wav_file.flush()
                     subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
             finally:
                 with self._lock:
@@ -1889,7 +1947,7 @@ class OpenAITTSSpeaker:
             )
             response.raise_for_status()
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
-                wav_file.write(response.content)
+                wav_file.write(_apply_configured_speaker_volume(response.content))
                 wav_file.flush()
                 subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
         except Exception as exc:
