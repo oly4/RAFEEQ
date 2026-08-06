@@ -180,24 +180,30 @@ def _start_sos_button_listener(
     shutdown_requested = False
     lock = threading.Lock()
 
-    def on_released() -> None:
+    def send_sos(source: str) -> None:
         nonlocal last_pressed_at, shutdown_requested
         now = time.monotonic()
         with lock:
             if shutdown_requested:
                 shutdown_requested = False
-                print("SOS button release ignored after shutdown hold.")
+                print(f"SOS button {source} ignored after shutdown hold.")
                 return
             if now - last_pressed_at < settings.sos_button_cooldown_seconds:
-                print("SOS button press ignored during cooldown.")
+                print(f"SOS button {source} ignored during cooldown.")
                 return
             last_pressed_at = now
         try:
             event_id = emergencies.trigger_sos()
-            print(f"SOS button pressed; event queued: {event_id}")
-            outbox.publish_pending()
+            published = outbox.publish_pending()
+            print(f"SOS button {source}; event queued: {event_id}; published={published}")
         except Exception as exc:
             print(f"SOS button handling failed: {exc}")
+
+    def on_pressed() -> None:
+        send_sos("pressed")
+
+    def on_released() -> None:
+        send_sos("released")
 
     def on_held() -> None:
         nonlocal shutdown_requested
@@ -224,6 +230,7 @@ def _start_sos_button_listener(
             hold_repeat=False,
             pin_factory=factory,
         )
+        button.when_pressed = on_pressed
         button.when_released = on_released
         button.when_held = on_held
         wiring = "GPIO to GND" if settings.sos_button_pull_up else "GPIO to 3.3V"
