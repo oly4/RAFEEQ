@@ -973,8 +973,12 @@ def _configured_speaker_volume_percent() -> int:
     return 100
 
 
-def _apply_configured_speaker_volume(wav_bytes: bytes) -> bytes:
-    volume = _configured_speaker_volume_percent()
+def _speaker_volume_gain(volume: int) -> float:
+    return (max(0, min(100, volume)) / 100.0) ** 2
+
+
+def _apply_configured_speaker_volume(wav_bytes: bytes, volume: int | None = None) -> bytes:
+    volume = _configured_speaker_volume_percent() if volume is None else volume
     if volume >= 99:
         return wav_bytes
     try:
@@ -988,7 +992,7 @@ def _apply_configured_speaker_volume(wav_bytes: bytes) -> bytes:
         samples.frombytes(frames)
         if sys.byteorder == "big":
             samples.byteswap()
-        factor = volume / 100.0
+        factor = _speaker_volume_gain(volume)
         for index, sample in enumerate(samples):
             samples[index] = max(-32768, min(32767, round(sample * factor)))
         if sys.byteorder == "big":
@@ -1867,6 +1871,10 @@ class EspeakSpeaker:
 
     def speak(self, text: str, locale: str = "ar") -> None:
         print(f"[{locale}] {format_console_text(text)}")
+        volume = _configured_speaker_volume_percent()
+        if volume <= 0:
+            print("Robot speaker volume is 0%; playback skipped.")
+            return
         with self._lock:
             self._last_speak_started = time.monotonic()
             self._speaking_until = time.monotonic() + 3600
@@ -1890,11 +1898,12 @@ class EspeakSpeaker:
                 )
                 if result.returncode == 0:
                     wav_file.seek(0)
-                    wav_bytes = _apply_configured_speaker_volume(wav_file.read())
+                    wav_bytes = _apply_configured_speaker_volume(wav_file.read(), volume)
                     wav_file.seek(0)
                     wav_file.truncate()
                     wav_file.write(wav_bytes)
                     wav_file.flush()
+                    print(f"Robot speaker volume applied: {volume}%")
                     subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
             finally:
                 with self._lock:
@@ -1922,6 +1931,10 @@ class OpenAITTSSpeaker:
 
     def speak(self, text: str, locale: str = "ar") -> None:
         print(f"[{locale}] {format_console_text(text)}")
+        volume = _configured_speaker_volume_percent()
+        if volume <= 0:
+            print("Robot speaker volume is 0%; playback skipped.")
+            return
         if not self.api_key:
             self.fallback.speak(text, locale)
             return
@@ -1947,8 +1960,9 @@ class OpenAITTSSpeaker:
             )
             response.raise_for_status()
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
-                wav_file.write(_apply_configured_speaker_volume(response.content))
+                wav_file.write(_apply_configured_speaker_volume(response.content, volume))
                 wav_file.flush()
+                print(f"Robot speaker volume applied: {volume}%")
                 subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
         except Exception as exc:
             print(f"OpenAI TTS unavailable; using espeak fallback: {exc}")
