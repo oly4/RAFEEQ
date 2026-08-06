@@ -346,7 +346,13 @@ def set_raspberry_pi_speaker_volume(
     response_model=SpeakerVolumeStatus,
 )
 def test_raspberry_pi_speaker() -> SpeakerVolumeStatus:
-    return _run_speaker_helper("test")
+    status = _run_speaker_helper("status")
+    _queue_robot_speech(
+        "RAFEEQ speaker test. I am speaking with the robot voice now.",
+        "en",
+    )
+    status.message = "AI speaker test queued for RAFEEQ robot."
+    return status
 
 
 @router.post(
