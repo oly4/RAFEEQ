@@ -54,10 +54,11 @@ def _bounded_volume(value: Any) -> int:
 
 
 def _set_volume(volume: int) -> None:
-    if _run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{volume / 100:.2f}"]):
+    hardware_volume = 0 if volume <= 0 else 100
+    if _run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{hardware_volume / 100:.2f}"]):
         return
     for mixer in _mixer_candidates():
-        if _run(["amixer", "set", mixer, f"{volume}%"]):
+        if _run(["amixer", "set", mixer, f"{hardware_volume}%"]):
             return
 
 

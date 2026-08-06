@@ -974,7 +974,12 @@ def _configured_speaker_volume_percent() -> int:
 
 
 def _speaker_volume_gain(volume: int) -> float:
-    return (max(0, min(100, volume)) / 100.0) ** 2
+    volume = max(0, min(100, volume))
+    if volume <= 0:
+        return 0.0
+    if volume >= 100:
+        return 1.0
+    return 10 ** ((volume - 100) * 60 / 100 / 20)
 
 
 def _apply_configured_speaker_volume(wav_bytes: bytes, volume: int | None = None) -> bytes:
@@ -1903,7 +1908,7 @@ class EspeakSpeaker:
                     wav_file.truncate()
                     wav_file.write(wav_bytes)
                     wav_file.flush()
-                    print(f"Robot speaker volume applied: {volume}%")
+                    print(f"Robot speaker volume applied: {volume}% gain={_speaker_volume_gain(volume):.4f}")
                     subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
             finally:
                 with self._lock:
@@ -1962,7 +1967,7 @@ class OpenAITTSSpeaker:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_file:
                 wav_file.write(_apply_configured_speaker_volume(response.content, volume))
                 wav_file.flush()
-                print(f"Robot speaker volume applied: {volume}%")
+                print(f"Robot speaker volume applied: {volume}% gain={_speaker_volume_gain(volume):.4f}")
                 subprocess.run(["aplay", "-D", self.output_device, wav_file.name], check=False)
         except Exception as exc:
             print(f"OpenAI TTS unavailable; using espeak fallback: {exc}")

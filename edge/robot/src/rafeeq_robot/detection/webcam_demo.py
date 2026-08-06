@@ -1129,7 +1129,12 @@ def _configured_speaker_volume_percent() -> int:
 
 
 def _speaker_volume_gain(volume: int) -> float:
-    return (max(0, min(100, volume)) / 100.0) ** 2
+    volume = max(0, min(100, volume))
+    if volume <= 0:
+        return 0.0
+    if volume >= 100:
+        return 1.0
+    return 10 ** ((volume - 100) * 60 / 100 / 20)
 
 
 def _apply_configured_speaker_volume(wav_bytes: bytes, volume: int | None = None) -> bytes:
@@ -1168,7 +1173,7 @@ def _play_wav(wav_bytes: bytes, output_device: int | str | None) -> None:
         _safe_print("Fall speaker volume is 0%; playback skipped.")
         return
     wav_bytes = _apply_configured_speaker_volume(wav_bytes, volume)
-    _safe_print(f"Fall speaker volume applied: {volume}%")
+    _safe_print(f"Fall speaker volume applied: {volume}% gain={_speaker_volume_gain(volume):.4f}")
     if sys.platform != "win32":
         device = str(output_device or "plughw:0,0")
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as audio_file:
