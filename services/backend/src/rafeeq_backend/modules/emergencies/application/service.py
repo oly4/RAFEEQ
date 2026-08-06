@@ -208,6 +208,7 @@ def ingest_event(db: Session, device: Device, event: DeviceEventEnvelope) -> Ing
             "open_activities",
             "open_album",
             "open_settings",
+            "read_routine",
             "start_poem_test",
             "start_photo_test",
             "add_routine",

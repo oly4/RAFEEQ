@@ -112,7 +112,16 @@ def main() -> None:
             except Exception as exc:
                 print(f"Initial synchronization failed; local behavior remains active: {exc}")
         if voice_input is not None:
-            _start_daemon_voice_loop(voice, voice_input, settings, speaker, outbox, poems, memories)
+            _start_daemon_voice_loop(
+                voice,
+                voice_input,
+                settings,
+                reminders,
+                speaker,
+                outbox,
+                poems,
+                memories,
+            )
         _start_robot_speech_command_watcher(speaker)
         print("Daemon mode active.")
         _speak_startup_greeting(settings, speaker, voice_input is not None)
@@ -308,6 +317,7 @@ def _start_daemon_voice_loop(
     voice: VoiceIntentRouter | OpenAIRealtimeVoiceAgent,
     voice_input: VoiceInputAdapter,
     settings: RobotSettings,
+    reminders: ReminderService,
     speaker: SpeakerAdapter,
     outbox: OutboxService,
     poems: PoemPracticeService,

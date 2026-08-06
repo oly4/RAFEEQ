@@ -368,6 +368,7 @@ class OpenAIRealtimeVoiceAgent:
             "start_poem_test",
             "start_photo_test",
             "open_routine",
+            "read_routine",
             "open_dashboard",
             "open_settings",
             "edit_routine",
@@ -518,6 +519,7 @@ def _default_action_text(action: str, locale: str = "ar") -> str:
         "open_activities": "تم، فتحت لك الأنشطة.",
         "open_album": "تم، فتحت لك الألبوم.",
         "open_settings": "تم، فتحت لك الإعدادات.",
+        "read_routine": "تم، أقرأ لك روتين اليوم.",
         "start_poem_test": "أبشر، نبدأ تمرين القصيدة بهدوء.",
         "start_photo_test": "أبشر، نبدأ جولة الذكريات بهدوء.",
         "add_routine": "تم، أضفت المهمة.",
@@ -532,6 +534,7 @@ def _default_action_text(action: str, locale: str = "ar") -> str:
         "open_activities": "Done. I opened activities.",
         "open_album": "Done. I opened the album.",
         "open_settings": "Done. I opened settings.",
+        "read_routine": "Done. I will read today's routine.",
         "start_poem_test": "Sure. We can start the poem exercise.",
         "start_photo_test": "Sure. We can start the memory tour.",
         "add_routine": "Done. I added the task.",
@@ -578,7 +581,7 @@ _TEXT_PLANNER_INSTRUCTIONS = (
     + "\nReturn only compact JSON. Allowed actions: answer, complete_task, snooze_task, "
     "decline_task, undo_complete_task, request_help, open_album, open_activities, "
     "start_poem_test, start_photo_test, start_activity, open_routine, open_dashboard, "
-    "open_settings, request_add_task, request_edit_task, request_delete_task. "
+    "open_settings, read_routine, request_add_task, request_edit_task, request_delete_task. "
     "Use complete_task when the user says they finished/did/took a "
     "task or medicine. Use decline_task when they say they did not do it. Use "
     "snooze_task when they ask to remind later. Use undo_complete_task when they say "
@@ -707,6 +710,7 @@ _TOOLS = [
                         "open_routine",
                         "open_activities",
                         "open_album",
+                        "read_routine",
                         "start_poem_test",
                         "start_photo_test",
                     ],
