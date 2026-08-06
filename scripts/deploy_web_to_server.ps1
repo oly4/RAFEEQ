@@ -64,7 +64,7 @@ Write-Host "Uploading RAFEEQ web app to $target..."
 scp @sshOptions $ArchivePath "$target`:/tmp/rafeeq-web.tar.gz"
 
 Write-Host "Starting nginx web container on port $WebPort..."
-ssh @sshOptions $target @"
+$RemoteScript = @"
 set -e
 mkdir -p /opt/rafeeq-web
 rm -rf /opt/rafeeq-web/*
@@ -74,6 +74,8 @@ docker rm -f rafeeq-web >/dev/null 2>&1 || true
 docker run -d --restart unless-stopped --name rafeeq-web -p $WebPort`:80 -v /opt/rafeeq-web:/usr/share/nginx/html:ro nginx:alpine
 docker ps --filter name=rafeeq-web
 "@
+$RemoteScript = $RemoteScript -replace "`r`n", "`n"
+$RemoteScript | ssh @sshOptions $target "bash -s"
 
 Write-Host ""
 Write-Host "RAFEEQ web app deployed:"
