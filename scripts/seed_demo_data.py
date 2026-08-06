@@ -19,7 +19,6 @@ from rafeeq_backend.models import (
     EmergencyStateTransition,
     MedicationDetail,
     MemoryCategory,
-    MemoryItem,
     Patient,
     Routine,
     RoutineOccurrence,
@@ -188,19 +187,6 @@ def main() -> None:
             db.add(category)
             categories.append(category)
         db.flush()
-        for index in range(8):
-            db.add(
-                MemoryItem(
-                    patient_id=patient.id,
-                    category_id=categories[index % len(categories)].id,
-                    title=f"ذكرى تجريبية {index + 1}",
-                    description="Placeholder, non-sensitive demonstration content.",
-                    media_type="text",
-                    people_labels_json=[],
-                    visibility="caregivers",
-                    created_by=caregiver.id,
-                )
-            )
         db.add(
             DoctorNote(
                 patient_id=patient.id,
