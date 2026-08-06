@@ -81,6 +81,10 @@ class _CaregiverHomeScreenState extends ConsumerState<CaregiverHomeScreen> {
                 SentReportsTab(session: session),
               ),
           onOpenActivities: () => _openPanel(ActivitiesPanel(session: session)),
+          onOpenPoem: () => _openPanel(ActivitiesPanel(
+            session: session,
+            startPoemImmediately: true,
+          )),
           onOpenDoctor: () => _openPanel(DoctorPanel(session: session)),
           onOpenCamera: () => _openPanel(const CameraTestScreen())),
       RoutineTab(
@@ -491,6 +495,7 @@ class DashboardTab extends StatefulWidget {
       required this.onOpenReports,
       required this.onOpenSentReports,
       required this.onOpenActivities,
+      required this.onOpenPoem,
       required this.onOpenDoctor,
       required this.onOpenCamera,
       super.key});
@@ -500,6 +505,7 @@ class DashboardTab extends StatefulWidget {
   final VoidCallback onOpenReports;
   final VoidCallback onOpenSentReports;
   final VoidCallback onOpenActivities;
+  final VoidCallback onOpenPoem;
   final VoidCallback onOpenDoctor;
   final VoidCallback onOpenCamera;
 
@@ -669,7 +675,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       child: _QuickAction(
                         icon: Icons.mic_none_rounded,
                         label: strings.poetry,
-                        onTap: widget.onOpenActivities,
+                        onTap: widget.onOpenPoem,
                       ),
                     ),
                   ]),

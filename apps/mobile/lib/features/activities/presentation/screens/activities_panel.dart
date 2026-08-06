@@ -257,6 +257,22 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
     var transcript = '';
     var feedback = '';
 
+    void selectPoem(Map<String, dynamic> poem) {
+      selectedPoemId = poem['id']?.toString();
+      poemTitle.text = poem['title']?.toString() ?? '';
+      poemStart.text = poem['poem_start']?.toString() ?? '';
+      completion.text = poem['expected_completion']?.toString() ?? '';
+    }
+
+    if (savedPoems.isNotEmpty) {
+      selectPoem(savedPoems.first);
+      feedback = _copy(
+        context,
+        'تم اختيار أول قصيدة محفوظة. خل رفيق يقرأها أو ابدأ الاختبار.',
+        'The first saved poem is ready. Let Rafeeq read it, or start the test.',
+      );
+    }
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -298,12 +314,7 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
                               .firstOrNull;
                           if (poem == null) return;
                           setDialogState(() {
-                            selectedPoemId = value;
-                            poemTitle.text = poem['title']?.toString() ?? '';
-                            poemStart.text =
-                                poem['poem_start']?.toString() ?? '';
-                            completion.text =
-                                poem['expected_completion']?.toString() ?? '';
+                            selectPoem(poem);
                             transcript = '';
                             feedback = _copy(
                               context,
@@ -509,9 +520,17 @@ class _ActivitiesPanelState extends State<ActivitiesPanel> {
                         final audio =
                             response.data?['audio_data_url']?.toString();
                         if (audio == null || audio.isEmpty) {
-                          throw StateError('OpenAI audio is unavailable');
+                          final promptText =
+                              response.data?['prompt_text']?.toString() ??
+                                  _copy(
+                                    context,
+                                    'حاضر، بنقرأ بداية القصيدة سوا. $start',
+                                    'Sure. Let us read the poem beginning together. $start',
+                                  );
+                          await speakMemoryText(promptText);
+                        } else {
+                          await playMemoryAudioDataUrl(audio);
                         }
-                        await playMemoryAudioDataUrl(audio);
                         if (!dialogContext.mounted) return;
                         setDialogState(() {
                           feedback = _copy(
