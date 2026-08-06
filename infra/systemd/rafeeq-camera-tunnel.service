@@ -1,7 +1,7 @@
 [Unit]
 Description=RAFEEQ Camera Preview Reverse SSH Tunnel
-After=network-online.target rafeeq-camera.service
-Wants=network-online.target rafeeq-camera.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple

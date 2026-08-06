@@ -251,10 +251,16 @@ install_services() {
   if [ -f "$INSTALL_DIR/infra/systemd/rafeeq-camera-control-tunnel.service" ]; then
     install -m 0644 "$INSTALL_DIR/infra/systemd/rafeeq-camera-control-tunnel.service" /etc/systemd/system/rafeeq-camera-control-tunnel.service
   fi
+  if [ -f "$INSTALL_DIR/infra/systemd/rafeeq-camera-tunnel.service" ]; then
+    install -m 0644 "$INSTALL_DIR/infra/systemd/rafeeq-camera-tunnel.service" /etc/systemd/system/rafeeq-camera-tunnel.service
+  fi
   systemctl daemon-reload
   systemctl enable rafeeq-backend rafeeq-robot
   if [ -f /etc/systemd/system/rafeeq-camera-control-tunnel.service ]; then
     systemctl enable rafeeq-camera-control-tunnel
+  fi
+  if [ -f /etc/systemd/system/rafeeq-camera-tunnel.service ]; then
+    systemctl enable rafeeq-camera-tunnel
   fi
   systemctl disable rafeeq-camera || true
   systemctl restart rafeeq-backend
@@ -262,6 +268,9 @@ install_services() {
   systemctl restart rafeeq-robot
   if [ -f /etc/systemd/system/rafeeq-camera-control-tunnel.service ]; then
     systemctl restart rafeeq-camera-control-tunnel || true
+  fi
+  if [ -f /etc/systemd/system/rafeeq-camera-tunnel.service ]; then
+    systemctl restart rafeeq-camera-tunnel || true
   fi
   systemctl stop rafeeq-camera || true
 }
