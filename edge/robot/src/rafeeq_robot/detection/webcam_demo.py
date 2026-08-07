@@ -112,9 +112,9 @@ class FrameMotionFallDetector:
 
     def __init__(
         self,
-        confirmation_frames: int = 4,
-        min_area_ratio: float = 0.035,
-        upright_memory_seconds: float = 8.0,
+        confirmation_frames: int = 2,
+        min_area_ratio: float = 0.025,
+        upright_memory_seconds: float = 12.0,
     ) -> None:
         import cv2  # type: ignore[import-not-found]
 
@@ -130,7 +130,7 @@ class FrameMotionFallDetector:
         self.last_metrics: MotionMetrics | None = None
         self._last_upright_at: datetime | None = None
         self._upright_center_y: float | None = None
-        self._candidate_frames = 0
+        self._candidate_score = 0.0
 
     def analyze(self, frame: Any, timestamp: datetime) -> FallDetectionResult:
         import cv2  # type: ignore[import-not-found]
@@ -145,7 +145,7 @@ class FrameMotionFallDetector:
         min_area = float(height * width) * self.min_area_ratio
         contours = [contour for contour in contours if cv2.contourArea(contour) >= min_area]
         if not contours:
-            self._candidate_frames = max(0, self._candidate_frames - 1)
+            self._candidate_score = max(0.0, self._candidate_score - 0.35)
             self.last_metrics = None
             return self._result(False, 0.0, [], timestamp)
 
@@ -154,28 +154,28 @@ class FrameMotionFallDetector:
         center_y = (y + box_height / 2) / max(height, 1)
         aspect_ratio = box_width / max(box_height, 1)
         area_ratio = cv2.contourArea(contour) / max(float(height * width), 1.0)
-        upright = box_height >= box_width * 1.25 and center_y < 0.82
+        upright = box_height >= box_width * 1.05 and center_y < 0.85
         if upright:
             self._last_upright_at = timestamp
             self._upright_center_y = center_y
-            self._candidate_frames = 0
+            self._candidate_score = 0.0
 
         recently_upright = (
             self._last_upright_at is not None
             and (timestamp - self._last_upright_at).total_seconds() <= self.upright_memory_seconds
         )
         descent = center_y - (self._upright_center_y if self._upright_center_y is not None else center_y)
-        low_horizontal = aspect_ratio >= 1.25 and center_y >= 0.55
-        clear_low_horizontal = aspect_ratio >= 1.65 and center_y >= 0.62
-        descended = descent >= 0.10
+        low_horizontal = aspect_ratio >= 1.08 and center_y >= 0.50
+        clear_low_horizontal = aspect_ratio >= 1.35 and center_y >= 0.55
+        descended = descent >= 0.06
         candidate = low_horizontal and (recently_upright or descended or clear_low_horizontal)
         if candidate:
-            self._candidate_frames += 1
+            self._candidate_score += 1.0 if clear_low_horizontal or descended else 0.75
         else:
-            self._candidate_frames = max(0, self._candidate_frames - 1)
+            self._candidate_score = max(0.0, self._candidate_score - 0.35)
 
-        triggered = self._candidate_frames >= self.confirmation_frames
-        aspect_score = min(1.0, max(0.0, (aspect_ratio - 1.2) / 1.2))
+        triggered = self._candidate_score >= self.confirmation_frames
+        aspect_score = min(1.0, max(0.0, (aspect_ratio - 1.0) / 1.1))
         descent_score = min(1.0, max(0.0, descent / 0.25))
         area_score = min(1.0, max(0.0, (area_ratio - self.min_area_ratio) / 0.12))
         confidence = min(0.90, 0.35 + 0.3 * aspect_score + 0.2 * descent_score + 0.15 * area_score)
@@ -185,7 +185,7 @@ class FrameMotionFallDetector:
             hip_y=center_y,
             descent=descent,
             recently_upright=recently_upright,
-            candidate_frames=self._candidate_frames,
+            candidate_frames=int(round(self._candidate_score)),
             stationary_fall_candidate=clear_low_horizontal,
         )
         reasons = []
@@ -196,7 +196,7 @@ class FrameMotionFallDetector:
         if clear_low_horizontal:
             reasons.append("motion_clear_low_horizontal")
         if triggered:
-            self._candidate_frames = 0
+            self._candidate_score = 0.0
         return self._result(triggered, confidence, reasons if triggered else [], timestamp)
 
     @staticmethod
