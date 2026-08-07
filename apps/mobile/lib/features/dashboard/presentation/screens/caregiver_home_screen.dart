@@ -515,6 +515,7 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> {
   late Future<Map<String, dynamic>> future;
+  bool _fallDetectionQuickBusy = false;
 
   @override
   void initState() {
@@ -536,6 +537,82 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   void refresh() => setState(() => future = _load());
+
+  String _copy(String ar, String en) =>
+      Localizations.localeOf(context).languageCode == 'ar' ? ar : en;
+
+  Future<void> _startFallDetectionQuick() async {
+    setState(() => _fallDetectionQuickBusy = true);
+    try {
+      final response = await _cameraControlDio().post<Map<String, dynamic>>(
+        '/devices/camera/fall-detection/start',
+      );
+      final payload = response.data ?? const <String, dynamic>{};
+      if (!mounted) return;
+      final active = payload['active'] == true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(active
+              ? _copy(
+                  'تم تشغيل الكاميرا واكتشاف السقوط.',
+                  'Camera and fall detection started.',
+                )
+              : _copy(
+                  'تم إرسال أمر تشغيل اكتشاف السقوط.',
+                  'Fall detection start command sent.',
+                )),
+          action: SnackBarAction(
+            label: _copy('عرض', 'View'),
+            onPressed: widget.onOpenCamera,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_fallDetectionQuickError(error)),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _fallDetectionQuickBusy = false);
+    }
+  }
+
+  Dio _cameraControlDio() {
+    if (_routineSpeechPiControlBaseUrl.trim().isEmpty) {
+      return widget.session.api.dio;
+    }
+    return Dio(BaseOptions(
+      baseUrl: _normalizedPiControlBaseUrl(),
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 25),
+      headers: {
+        if (widget.session.accessToken != null)
+          'Authorization': 'Bearer ${widget.session.accessToken}',
+      },
+    ));
+  }
+
+  String _normalizedPiControlBaseUrl() {
+    final trimmed = _routineSpeechPiControlBaseUrl.trim();
+    if (trimmed.endsWith('/api/v1')) return trimmed;
+    return '${trimmed.replaceAll(RegExp(r'/+$'), '')}/api/v1';
+  }
+
+  String _fallDetectionQuickError(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['detail'] != null) {
+        return data['detail'].toString();
+      }
+    }
+    return _copy(
+      'تعذر تشغيل اكتشاف السقوط الآن.',
+      'Could not start fall detection right now.',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -679,6 +756,34 @@ class _DashboardTabState extends State<DashboardTab> {
                       ),
                     ),
                   ]),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: RafeeqColors.primary,
+                        disabledBackgroundColor:
+                            Colors.white.withValues(alpha: 0.45),
+                        disabledForegroundColor:
+                            RafeeqColors.primary.withValues(alpha: 0.55),
+                      ),
+                      onPressed: _fallDetectionQuickBusy
+                          ? null
+                          : _startFallDetectionQuick,
+                      icon: _fallDetectionQuickBusy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.health_and_safety_outlined),
+                      label: Text(_copy(
+                        'بدء اكتشاف السقوط',
+                        'Start fall detection',
+                      )),
+                    ),
+                  ),
                 ]),
               ),
               const SizedBox(height: 12),
